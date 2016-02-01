@@ -1,0 +1,349 @@
+<script>
+var globalActionConfig = IXW.Actions.configActions;
+var monitorCaller = TNM.Global.monitorCaller;
+var deviceCaller = TNM.Global.deviceCaller;
+var CurrentSite = null;
+
+</script>
+<tpl id="info">
+	<div id="Grid" class="{clz}"></div>
+</tpl>
+
+<tpl id="users">
+	<li>
+		<a data-href="$combo.change" data-key="{id}">{name}</a>
+	</li>
+</tpl>
+
+<script>
+var currentFilter = null;
+
+var lineInfo = null;
+globalActionConfig([["site.change", function(params, el){
+	var id = params.key, name = el.innerHTML;
+	var dropdownEl = $XH.ancestor(el, "dropdown");
+	if (!dropdownEl) return;
+	var inputEl = $XD.first(dropdownEl, "input");
+	inputEl.value = id;
+	var nameEl = $XH.first($XH.first(dropdownEl, "dropdown-toggle"), "name");
+	nameEl.innerHTML = name;
+	jQuery(nameEl).attr("title",name);
+	if(id != "all"){
+		monitorCaller("getUsers", {siteId: id}, function(users){
+			var userItems = [{id: "all", name: "所有用户"}].concat(users);
+			jQuery(".userId .dropdown-menu").html("").append(jQuery(IX.map(userItems, function(user){
+				return t_users.renderData("", user);
+			}).join("")));
+		});
+			jQuery(".userId").removeClass("disable");
+			jQuery("#userId").attr("value","all");
+			jQuery("#userId").next().find("span.name")[0].innerHTML="所有用户";
+	}else{
+		jQuery("#userId").value="all";
+		jQuery("#userId").next().find("span.name")[0].innerHTML="所有用户";
+		jQuery(".userId").addClass("disable");
+	}
+	currentFilter.change();
+}],["grid.export", function(params, el){
+	var $form = jQuery('<form id="form" action="/statistics/download" method="POST" style="display:none"></form>');
+	var filterParams = currentFilter.getFilterParams();
+	$form.append(jQuery('<input type="text" name="from" value="' + filterParams.from + '">'))
+		.append(jQuery('<input type="text" name="to" value="' + filterParams.to + '">'))
+		.append(jQuery('<input type="text" name="siteId" value="' + filterParams.siteId + '">'))
+		.append(jQuery('<input type="text" name="deviceType" value="' + filterParams.deviceType + '">'))
+		.append(jQuery('<input type="submit">'))
+		.appendTo(jQuery("#body"));
+	$form.submit();
+}],["grid.print", function(params, el){
+	jQuery(".statistics-list.ixw-grid").jqprint({
+		importCSS: true
+	});
+}]]);
+function createLogsGrid(){
+	var grid = null;
+	var columns = "logUserName,logDeviceName,siteName,logOpDate,logIp,logOpType,details,logDesc".split(",");
+	var hasEvent=true;
+	currentFilter = new TNM.Lib.BaseFilterTools({
+		hasDate: true,
+		defaultDate: "default",
+		dataText: "起止时间",
+		toolList: [{
+			id: "siteId",
+			text: "车站",
+			items: {
+				id: "siteId",
+				items: [{id: "all", name: "所有车站", action: "site.change"}].concat(IX.loop(lineInfo, [], function(acc, item, idx){
+					acc.push({
+						id: item.id,
+						name: item.name,
+						action: "site.change"
+					});
+					return acc;
+				}))
+			}
+		},{
+			id: "userId",
+			text: "用户"
+		},{
+			id: "deviceType",
+			text: "设备类型"
+		},{
+			id:"ip",
+			text:"IP"
+		}]
+	});
+	grid = new TNM.Lib.FilterGrid({
+		container: "Grid",
+		title : "操作日志",
+		clz : "logs-list",
+		columns: columns,
+		actions : [],
+		tools: currentFilter,
+		usePagination : true,
+		baseParams: {
+			siteId: "all",
+			deviceType: "all",
+			userId: "all",
+			from: TNM.Lib.GetCurDay(),
+			to: Math.floor(new Date().getTime()/1000),
+			ip:""
+		},
+		dataLoader : function(params, _cbFn){
+			var  siteId=params.siteId;
+			if(siteId==="all"){
+				params.userId="all";
+			}
+			monitorCaller("getLogs", params, function(data){
+				_cbFn(data);
+				if(hasEvent){
+					var inputEl = $X('ip');
+					IX.bind(inputEl, {
+						blur : function(e){currentFilter.change();},
+						keydown :function(e){
+							if (e.which == 13) 
+								inputEl.blur();
+						}
+					});
+					hasEvent = false;
+				}
+				var clientHeight = jQuery(".sidebar").height();
+				if(clientHeight > 880){
+					jQuery(".nvgrid-body").css("min-height",clientHeight-145 + "px");
+				}
+			});
+		}
+	});
+	return grid;
+}
+
+function showLogs(cbFn){
+	$X("body").innerHTML = t_info.renderData("", {clz: "logs"});
+	createLogsGrid();
+	cbFn();
+}
+
+</script>
+<tpl id="infotree">
+	<div id="Tree" class="{clz}"><div id="treeName">{treeName}</div>{treeData}</div>
+	<div class="nv-box {clz}">
+		<div class="nvgrid-title nv-title">性能监控</div>
+		<div id="container"></div>
+	</div>
+</tpl>
+
+<tpl id="statistics">
+<div class="{clz}">
+	<div id="Grid"></div>
+</div>
+</tpl>
+<script>
+var dashboards=null;
+function getDevices(cbFn){
+	deviceCaller("getDevicesForMonitor", {types:[0,1,2,3]}, function(data){
+		var arrCount=IX.loop(data, [], function(acc, site){
+		var Site = TCM.LineInfo.getSites().get(site.siteId);
+		if(Site){
+			var resultAll=[];
+			var axx=IX.loop(site.devices, [], function(arr, device){
+				var result;
+				if(device){
+					result=IX.loop(device.items, [], function(ayy, item){
+						if(item){
+							ayy.push({key:[item.id],name:item.name,id:item.id,nodes:[]}); 
+						}
+						return ayy;
+					});
+				}
+				resultAll=resultAll.concat(result);
+				return resultAll;
+			
+			});
+			var azz=IX.loop(axx, [], function(aee, item){
+				if(item){
+					aee.push(item.id);
+				}
+				return aee;
+			});
+			acc.push({key:azz,name:Site.name,siteId:site.siteId,nodes:axx});
+		}
+		return acc;
+		});
+		cbFn({nodes : arrCount});
+	});
+}
+
+function devicTreeClick(params){
+	var types = IX.map(params.keys.split(","),function(type){return Number(type);});
+	dashboards = new TNM.Lib.DashboardPanel($X('container'), function(dataFn, failFn){
+		monitorCaller("getPerf", {id: types[0]}, dataFn, failFn);
+		resizeFn();
+	});
+	var checker = new TNM.Util.PeriodicChecker(function(){
+		return $XH.first($X('container'), "mem");
+	}, dashboards.refresh, 15000);
+	setTimeout(function(){checker.start();}, 15000);
+	dashboards.init();
+}
+
+function showTreeNode(){
+	jQuery(".nv-tree>ul>li>ul>li").children("ul").hide();
+	jQuery(".nv-tree>ul>li").children('ul').hide();
+	jQuery(".nv-tree>ul>li>a span.count").hide();
+}
+
+function resizeFn(){
+	var width = document.documentElement.clientWidth;
+	var clientHeight = jQuery(".sidebar").height();
+	// var url=window.location.href;
+	// if(url.indexOf("#monitor")==-1)
+	// 	return "";
+	if(clientHeight > 658){
+		if($X("Tree"))
+			$X('Tree').style.height = clientHeight + "px";
+		jQuery('.monitor').css("height", clientHeight + "px");
+		jQuery(".nv-tree").css("height",clientHeight-60 + "px");
+		jQuery("#container").css("height", clientHeight - 40 + "px");
+	}
+	function _calc(width, value, initial){
+		var theWidth = 1831 - width;
+		return  Math.floor(((value - initial) / 482) * theWidth + initial) + "px";
+	}
+	if(width <= 1920 && width >= 1300){
+		jQuery(".mem").css({top: _calc(width, 300, 200), left: _calc(width, 30, 50)});
+		jQuery(".cpu").css({top: _calc(width, 30, 100), left: _calc(width, 245, 475)});
+		jQuery(".disk").css({top: _calc(width, 300, 200), left: _calc(width, 540, 980)});
+	}
+}
+
+function monitoPerf(cbFn){
+	getDevices(function(_cfg){
+		var cfg = IX.inherit(_cfg, {
+			htmlFn : function(node) {return node.name;},
+			click : devicTreeClick
+		});
+		var tree = new TCM.Lib.Tree(cfg);
+		$X('body').innerHTML = t_infotree.renderData("", {
+			treeName : "线路设备列表",
+			treeData : tree.getHTML(),
+			clz : "monitor"
+		});
+		showTreeNode();
+		jQuery(".nv-tree li:first a:first span:last").click();
+		$Xw.bind({"resize": resizeFn});
+	});
+	cbFn();
+}
+
+function createStatisticsGrid(){
+	var grid = null;
+	var columns = "siteName,troDeviceName,troNum,details,troDesc".split(",");
+	currentFilter = new TNM.Lib.BaseFilterTools({
+		buttons: [{value: "export"},{value: "print"}],
+		hasDate: true,
+		defaultDate: "default",
+		dataText: "起止时间",
+		toolList: [{
+			id: "siteId",
+			text: "选择车站",
+			items: {
+				id: "siteId",
+				items: [{id: "all", name: "所有车站"}].concat(IX.loop(lineInfo, [], function(acc, item, idx){
+					acc.push({
+						id: item.id,
+						name: item.name
+					});
+					return acc;
+				}))
+			}
+		},{
+			id: "deviceType",
+			text: "设备类型"
+		}]
+	});
+	grid = new TNM.Lib.FilterGrid({
+		container: "Grid",
+		title : "统计分析",
+		clz : "statistics-list",
+		columns: columns,
+		actions : [],
+		tools: currentFilter,
+		usePagination : true,
+		baseParams: {
+			siteId: "all",
+			deviceType: "all",
+			from: TNM.Lib.GetCurDay(),
+			to: Math.floor(new Date().getTime()/1000)
+		},
+		dataLoader : function(params, _cbFn){
+			monitorCaller("getStatistics", params, function(data){
+				_cbFn(data);
+				var arr = ["$grid.export", "$grid.print"];
+				if(data.items.length === 0){
+					jQuery(".filterBtn").removeAttr("data-href");
+				}else{
+					jQuery(".filterBtn").each(function(index, el) {
+						jQuery(this).attr("data-href", arr[index]);
+					});
+				}
+				var clientHeight = jQuery(".sidebar").height();
+				if(clientHeight > 880){
+					jQuery(".nvgrid-body").css("min-height",clientHeight-145 + "px");
+				}
+			});
+		}
+	});
+	return grid;
+}
+
+function showStatistic(cbFn){
+	$X('body').innerHTML = t_statistics.renderData("", {clz: "statistics"});
+	createStatisticsGrid();
+	cbFn();
+}
+function switchOut(currentContext, nextContext){
+	var pageName = currentContext.name;
+	if(pageName == "monitor-perf")
+	dashboards=null;
+}
+IX.ns("TNM.Monitor");
+TNM.Monitor.init = function(pageCfg, pageParams, cbFn){
+	pageCfg.switchOut=switchOut;
+	lineInfo = IX.loop(TCM.LineInfo.getSites().getAll(), [], function(acc, site, idx){
+		if(site.type == "1" ||site.type == "2" || site.type == "3")
+			acc.push(site);
+		return acc;
+	});
+	switch(pageCfg.name){
+	case "monitor-perf":
+		CurrentSite = TNM.Env.getSession().getLineInfo();
+		monitoPerf(cbFn);
+		break;
+	case "monitor-stat":
+		showStatistic(cbFn);
+		break;
+	case "monitor-logs":
+		showLogs(cbFn);
+		break;
+	}
+};
+</script>

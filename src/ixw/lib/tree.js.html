@@ -1,0 +1,103 @@
+<tpl id="treeNodes">
+	<ul>
+		<tpl id="items">
+			<li class="{expandClz}">
+				<a class="{clz}" data-href="$tree.click" data-key="{key}" data-siteId="{siteId}" title="{name}" data-name="{name}" data-zoneId="{zoneId}">
+					<span class="pic-expand"></span>
+					<span>{html}</span>
+				</a>{HTML}
+			</li>
+		</tpl>
+	</ul>
+</tpl> 
+
+<tpl id="tree">
+<div class="nv-tree" id="{id}">{html}</div>
+</tpl>
+
+<script>
+var treeActionsConfig = IXW.Actions.configActions;
+var treeClickHT = {};
+function getTreeClick(el){
+	var treeEl = $XH.ancestor(el, "nv-tree");
+	if(!treeEl)
+		return null;
+	return treeClickHT[treeEl.id];
+}
+treeActionsConfig([
+	["tree.click", function(params, el, evt){
+		if ($XH.hasClass(evt.target, "pic-expand")){
+			var li = jQuery(el).parent().get(0);
+			if(jQuery(el).parent().children('ul').css("display") == "none"){
+				jQuery(el).parent().children('ul').slideDown();
+				if(!$XH.hasClass(li, "none")){
+					$XH.removeClass(li, "rotation");
+					$XH.removeClass(li, "expand");
+					$XH.addClass(li, "fold");
+				}
+			}else{
+				jQuery(el).parent().children('ul').slideUp();
+				if(!$XH.hasClass(li, "none")){
+					$XH.removeClass(li, "fold");
+					$XH.addClass(li, "expand");
+					$XH.addClass(li, "rotation");
+				}
+			}
+		}else{
+			if(params.key == "{key}")
+				return;
+			jQuery(".nv-tree").find("a").removeClass('select');
+			jQuery(el).addClass('select');
+			getTreeClick(el)({
+				keys: params.key, 
+				siteId: $XD.dataAttr(el, "siteId"), 
+				name: $XD.dataAttr(el, "name"),
+				zoneId: $XD.dataAttr(el, "zoneId"), 
+				el: el
+			});
+		}
+	}]
+]);
+IX.ns("TCM.Lib");
+TCM.Lib.Tree = function(cfg){
+	var container = $XP(cfg, "container");
+	var id = IX.id();
+	treeClickHT[id] = $XF(cfg,"click");
+	// var model = new IXW.Lib.TreeModel(id, cfg);
+	function getNodesHTML(nodes){
+		return t_treeNodes.renderData("", {
+			items : IX.map(nodes, function(node){
+				var HTML = node.nodes.length === 0 ? "" : getNodesHTML(node.nodes);
+				return  {
+					clz: node.key?"node-"+node.key.join("-"):"node", 
+					expandClz: HTML === "" ? "none" : "expand", 
+					html: cfg.htmlFn(node), 
+					key: node.key,
+					siteId: node.siteId, 
+					name: node.name, 
+					zoneId: node.zoneId, 
+					HTML : HTML
+				};
+			})
+		});
+	}
+	function getHTML(){
+		return t_tree.renderData("",{
+			id : id,
+			html : getNodesHTML(cfg.nodes)
+		});
+	}
+	/*function _show(){
+		var el = $X(container);
+		if(!el) return;
+		el.innerHTML = t_tree.renderData("", model.getTpldata());
+	}*/
+	var tree = {
+		getHTML : function(){return getHTML();},
+		// show : function(){model.load(_show);},
+		refresh : function(){}
+	};
+	return tree;
+};
+
+</script>

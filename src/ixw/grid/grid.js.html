@@ -1,0 +1,95 @@
+<script>
+
+var RowModelBase = IXW.Lib.GridModel.RowModelBase ;
+
+function RowModel(rowData, colModels,actions,moreActions){
+	var rowModel = new RowModelBase(rowData, colModels, actions,moreActions);
+	var tpldata = rowModel.getTpldata();
+	tpldata.clz = rowData.enabled?"":"disabled";
+	rowModel.getTpldata = function(){return tpldata;};
+	return rowModel;
+}
+
+IX.ns("TCM.Lib");
+
+var AllBtns = {
+	"refresh" : false,
+	"create" : false,
+	"add" : false,
+
+	"delete" : true
+};
+
+
+/***
+	container : 'body',
+	cfg :{
+		title  : "XXX",
+		grid : {
+			clz : 
+			columns:
+			actions :  [["name", "title", function()...]],
+			usePagination : false; default true;
+			clickOnRow : function(rowId){} //optional
+			dataLoader : function(parms, cbFn)
+		}
+		tools : { //default
+			buttons: ["refresh", "create", "delete"]
+
+			actions : {name : function(){}}
+		}
+		listen :{
+			createItem : function(cbFn)
+			deleteItems : function(rowModels, cbFn){}
+		}
+	}
+ */
+TCM.Lib.Grid =function(container, cfg){
+	var grid = null;
+	var createItemFn = $XF(cfg, "listen.createItem"),
+		deleteItemsFn = $XF(cfg, "listen.deleteItems");
+
+	function createFn(){
+		createItemFn(function(data){
+			grid.addItems(data.ids);
+		});
+	}
+	function deleteFn(rows){
+		deleteItemsFn(rows, function(){
+			grid.removeItems(IX.map(rows, function(row){return row.getId();}));
+		});
+	}
+	function _deleteItem(rowModel){deleteFn([rowModel]);}
+
+	grid = new NV.Lib.Grid(IX.inherit(cfg.grid, {
+		container : container,
+		title : $XP(cfg, "title", ""),
+		rowModel : $XP(cfg, "rowModel", RowModel),
+		actions : IX.loop($XP(cfg, "grid.actions", []), [],  function(acc, action){
+			if (IX.isString(action)) {
+				if (action == "delete")
+					acc.push(["delete", "删除",_deleteItem]);
+				return acc;
+			}	
+			if (action.length<=2 && action[0] == "delete")
+				action[2] = _deleteItem;
+			acc.push(action);
+			return acc;
+		}),
+		tools : {
+			buttons : IX.map($XP(cfg, "tools.buttons", []), function(btnName){
+				return {name : btnName, chkEnabled : AllBtns[btnName]};
+			}),
+			actions : IX.inherit({
+				refresh : function(){grid.refresh();},
+				create : createFn,
+				add : createFn,
+				"delete" : function(){deleteFn(grid.getSelectedRows());}
+			}, $XP(cfg, "tools.actions"))
+		}
+	}));
+
+	grid.show();
+	return grid;
+};
+</script>

@@ -1,0 +1,184 @@
+<script>
+var globalActionConfig = IXW.Actions.configActions;
+var ixwPages = IXW.Pages;
+
+var SiteTypes = TCM.Const.SiteTypes;
+var FaultLevels = TNM.Const.FaultLevels;
+var FaultFormats = TNM.Const.FaultFormats;
+
+var dataCaller = TNM.Global.sysCaller;
+var Duration = 3; //3sec
+
+</script>
+<tpl id="panel">
+	<div class="topo-bg"></div>
+	<div class="topo" style="top:{top}px;">
+		<div class="top">
+			<ul><tpl id="others"><li id="site-{id}" class="{typeName}" style="margin-right:{right}px;">
+				<a class="level{level}" data-href="$topo.click" data-key="{id}" data-value="{level}">
+					<span class="name">{name}</span><span class="ico-"></span>
+				</a>
+				<div class="line"></div>
+			</li></tpl></ul>
+			<div class="sp" style="width:{topSW}px;"></div>
+			<div class="line"></div>
+		</div>
+		<div class="middle">		
+			<div><span class="ico-cloud"></span></div>
+			<div class="line"></div>
+			<div><a data-href="$topo.expand">
+				<span class="ico-"></span><span class="name">全部车站</span>
+			</a></div>
+		</div>
+		<div class="bottom collapsed">
+			<div class="line"></div>
+			<div class="sp" style="width:{botSW}px;"></div>
+			<ul><tpl id="stations"><li id="site-{id}" class="station" style="margin-right:{right}px;">
+				<div class="line"></div>
+				<a class="level{level}" data-href="$topo.click" data-key="{id}" data-value="{level}">
+					<span class="ico-"></span><span class="name">{name}</span>
+				</a>
+			</li></tpl></ul>
+		</div>
+	</div>
+</tpl>
+<script>
+/** tpldata : {
+		top, 
+		others : [{id, type, name, right, level}],
+		stations : [{id, name, right, level}]
+}
+ */
+
+var HalfHeightWithStation = 340, HalfHeightWithoutStation = 240,
+	SiteBaseWidth = 80, StationBaseWidth = 32,
+	MinPanelWidth = 1000;
+var SiteTypeNames = {0:"tcc", 1:"occ", 2:"depot", 3: "station", 4:"bocc",5:"police",6:"ptsd"};
+
+function TopoPanel(container) {
+	var tpldata = {
+		top : 0
+	};
+
+	function _calcRight(w, isStation, forceUpdate){
+		var arr = tpldata[isStation ? "stations" : "others"];
+		var baseWidth = isStation ? StationBaseWidth : SiteBaseWidth;
+		var n =  Math.max(1, arr.length);
+		var r = Math.max(0, Math.min(baseWidth, Math.floor(w/n)-baseWidth));
+		IX.iterate(arr, function(item, idx){
+			if (idx >= n-1) {
+				item.right = 0;
+				return;
+			}
+			item.right = r;
+			var siteEl = forceUpdate ? $X('site-' + item.id) : null;
+			if (siteEl)
+				siteEl.style.marginRight = r + "px";
+		});
+		tpldata[isStation?"botSW": "topSW"] = (baseWidth+r) * (n-1);
+	}
+	function _resizeTop(el){
+		var bodyEl = $X('body');
+		var h = bodyEl.offsetHeight - 45;
+		el.style.height = h + "px";
+		var topoEl = $XH.first(el, "topo");
+		topoEl.style.height = h + "px";
+		var ifCollapsed = $XH.hasClass($XH.first(topoEl, "bottom"),"collapsed");
+		tpldata.top = Math.max(45, Math.floor(h/2) - (ifCollapsed ? HalfHeightWithoutStation : HalfHeightWithStation));
+		topoEl.style.top = tpldata.top + "px";
+		jQuery(".topo-bg").css({
+			width: "1720px",
+			height: "980px",
+			background: "url(" + TNM.Global.topoBackgroundImg + ")"
+		});
+	}
+	function _resizeWidth(w, forceUpdate){
+		var width = Math.max(MinPanelWidth, w) - 80;
+		_calcRight(width, false, forceUpdate);
+		_calcRight(width, true, forceUpdate);
+	}
+	function _refreshStatus(sitesStatus){
+		IX.iterate(sitesStatus, function(s){
+			var el = $XD.first($X('site-' + s.id), "a");
+			if (!el) return;
+			var level = $XP(s, "level", 0);
+			$XD.setDataAttr(el, "value", level);
+			el.className = "level" + level;
+		});
+	}
+	function _sortSites(name){
+		tpldata[name] = IX.Array.sort(tpldata[name], function(a, b){return a.no-b.no;});
+	}
+	function _refresh(sites){
+		var data = TNM.Lib.verticalText(sites);
+		IX.iterate(data, function(site,idx){
+			var name = site.type==SiteTypes.Station?"stations":"others";
+			site.typeName = SiteTypeNames[site.type];
+			if(name == "others"){
+				var theName = [];
+				theName.name = sites[idx].name;
+				if (!tpldata[name])
+					tpldata[name] = [IX.inherit(site, theName)];
+				else
+					tpldata[name].push(IX.inherit(site, theName));
+			}else{
+				if (!tpldata[name])
+					tpldata[name] = [site];
+				else
+					tpldata[name].push(site);
+			}
+		});
+		_sortSites("others");
+		_sortSites("stations");
+
+		var el = $X(container);
+		if (!el) return;
+
+		_resizeWidth(el.offsetWidth, false);
+		el.innerHTML = t_panel.renderData("", tpldata);
+		_resizeTop(el);
+	}
+	return {
+		checkFaultStatus : function(failFn){
+			dataCaller("getStatus4Sites", {}, _refreshStatus, failFn);
+		},
+		refresh : function(){
+			dataCaller("getAllSites", {}, _refresh);
+		},
+		resizeTop : function(){
+			var el = $X(container);
+			if (el) _resizeTop(el);
+		},
+		resize : function(){
+			var el = $X(container);
+			if (!el) return;
+			_resizeTop(el);
+			_resizeWidth(el.offsetWidth, true);
+		}
+	};
+}
+
+var panel = null;
+globalActionConfig([["topo.click",function(params,el){
+	var pageName = $XD.dataAttr(el,"value")>0?"fault-site":"sys-rack";
+	ixwPages.load(ixwPages.createPath(pageName, {id: params.key}));
+
+}],["topo.expand",function(params,el){
+	var bottomEl = $XH.next($XH.ancestor(el, "middle"), "bottom");
+	$XH.toggleClass(bottomEl, "collapsed");
+	//document.getElementById("goBotttom").scrollIntoView();
+	if (panel) 
+		panel.resizeTop();
+}]]);
+
+IX.ns("TNM.Lib");
+TNM.Lib.TopoPanel = function(container){
+	panel = new TopoPanel(container);
+	return IX.inherit(panel, {
+		check : function(failFn){
+			if (panel && $XH.first($X(container), "topo")) 
+				panel.checkFaultStatus(failFn);
+		}
+	});
+};
+</script>

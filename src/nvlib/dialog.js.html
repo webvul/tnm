@@ -1,0 +1,90 @@
+<script>
+var globalActionConfig = IXW.Actions.configActions;
+
+var dialog = null;
+function hideDialog(){if (dialog)dialog.hide();}
+var dialogCfg = null; 
+</script>
+<tpl id="modal">
+	<div class="head">{title}</div>
+	<div class="content">{content}</div>
+	<div class="foot">
+		<div class="l btns"><tpl id="lbtns">
+			<a class="btn {name}btn" data-href="$nvdialog-click" data-key="{name}">{text}</a>
+		</tpl></div>
+		<div class="r btns"><tpl id="rbtns">
+			<a class="btn {name}btn" data-href="$nvdialog-click" data-key="{name}">{text}</a>
+		</tpl></div>
+	</div>	
+</tpl>
+<tpl id="confirm">
+	<div class="area confirm"><div class="msg">{msg}</div></div>
+</tpl>
+<script>
+var CommonBtns = {
+	left : [],
+	right : [{name:"ok", text: "确定"}, {name:"cancel", text:"取消"}] 
+};
+globalActionConfig([["nvdialog-click",function(params,el){
+	var action = params.key;
+	if (action === "cancel")
+		return hideDialog();
+	$XF(dialogCfg, "listen." + action)();
+}],["ixw.alert.close", function(params, el){
+	jQuery($XH.ancestor(el, "ixw-alert")).removeClass("animate-shake");
+	jQuery("#IXW-alert").fadeOut();
+}]]);
+function dialogBodyRefresh(bodyEl){
+	bodyEl.className = "ixw-body nv-dialog " + $XP(dialogCfg, "clz", "");
+	bodyEl.innerHTML = t_modal.renderData("", {
+		title : $XP(dialogCfg, "title", ""),
+		content : $XP(dialogCfg, "content", ""),
+		lbtns : $XP(dialogCfg, "btns.left", CommonBtns.left),
+		rbtns : $XP(dialogCfg, "btns.right", CommonBtns.right)
+	});
+	$XF(dialogCfg, "afterShow")(bodyEl);
+}
+
+function showDialog(cfg){
+	dialogCfg = cfg;
+	if (!dialog)
+		dialog = new IXW.Lib.ModalDialog({
+			id : "nv-dialog",
+			bodyRefresh : dialogBodyRefresh
+		});
+	dialog.show();
+}
+
+IX.ns("NV.Dialog");
+/* {
+	clz
+	title : 
+	content: 
+	btns: {left: [{name,text}], right:[{name, text}]} // default CommonBtns;
+	listen: {
+		btnname : function()
+	},
+	afterShow : function(bodyEl)
+ }*/
+NV.Dialog.show = showDialog;
+NV.Dialog.hide = hideDialog;
+NV.Dialog.confirm = function(title, msg, okFn){ showDialog({
+	title : IX.encodeTXT(title),
+	content : t_confirm.renderData("", {msg: msg}),
+	listen : { ok : function(){okFn(hideDialog);} }
+});};
+
+NV.Dialog.confirm4login = function(title, msg, btns, okFn){ 
+	showDialog({
+		title : IX.encodeTXT(title),
+		btns : btns,
+		content : t_confirm.renderData("", {msg: msg}),
+		listen : { ok : function(){okFn(hideDialog);} }
+	});
+};
+
+NV.Dialog.alert = function(content){
+	var alert = IXW.Lib.alert(content);
+	$XH.addClass($XH.first(alert, "ixw-alert"), "animate-shake");
+};
+</script>

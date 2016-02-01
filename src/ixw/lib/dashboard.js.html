@@ -1,0 +1,175 @@
+<script>
+var Duration = 3; //3sec
+
+var VendorName = IX.CSSVendorName;
+var pointerTransform = VendorName + 'transform:rotate({deg}deg);';
+var circleTransform = VendorName + 'transform:rotate({deg}deg);' +
+		VendorName + 'transition:all {duration}s linear {delay}s;';
+
+function _calc(side, angel, duration, delay){
+	var data = {
+		deg : angel - (side=="right"?180:360) ,
+		duration : duration,
+		delay : delay
+	};
+	var cssTexts = {
+		name : side,
+		div : circleTransform.replaceByParams(data)
+	};
+	data.deg = 0 - data.deg;
+	cssTexts.span = circleTransform.replaceByParams(data);
+	return cssTexts;
+}
+function calcTransform(fromAngel, toAngel){
+	if (fromAngel <= 180 && toAngel <= 180)
+		return [_calc("right", toAngel, Duration, 0)];
+	else if (fromAngel >= 180 && toAngel >= 180)
+		return [_calc("left", toAngel, Duration, 0)];
+	
+	var nameArr = fromAngel < toAngel ? ["right", "left"]:["left","right"];
+	var delay = Math.floor(Duration*100* ( 180 - fromAngel) / (toAngel - fromAngel))/100;
+	return [
+		_calc(nameArr[0], 180, delay, 0),
+		_calc(nameArr[1], toAngel, Duration-delay, delay)
+	];
+}
+function refreshProgress(pEl, fromAngel, toAngel){
+	if (!pEl || fromAngel == toAngel)
+		return;
+	var dataArr = calcTransform(fromAngel, toAngel);
+	pEl.style.cssText = pointerTransform.replaceByParams({deg: toAngel + 95});
+	var el = $XH.first(pEl.parentNode, "circle");
+	IX.iterate(dataArr, function(item){
+		var pEl = $XH.first(el, item.name);
+		if(pEl){
+		var cEl = $XH.first(pEl, "pic-");
+		pEl.style.cssText = item.div;
+		cEl.style.cssText =  item.span;
+		}
+	});
+	if(toAngel < 10 || (toAngel > 350 && toAngel < 360)){
+		jQuery(pEl.parentNode).find(".top").css("display", "none");
+		jQuery(pEl).find("span").css("display", "none");
+	}else{
+		jQuery(pEl.parentNode).find(".top").css("display", "block");
+		jQuery(pEl).find("span").css("display", "block");
+	}
+}
+
+var DashboardItems = [
+	{type: "mem", value : 0, unit : "GB", title : "内存（共{total}GB）"}, 
+	{type : "cpu", value : 0, unit : "percent", title : "CPU"},
+	{type : "disk", value : 0, unit : "GB", title : "磁盘（共{total}GB）"}
+];
+</script>
+<tpl id="panel">
+	<tpl id="items">
+	<div class="dashboard {type}">
+		<div class="info">
+		</div>
+		<div class="centre"></div>
+		<div class="circle">
+			<div class="top"></div> 
+			<div class="left"><span class="pic-"></span></div>
+			<div class="right"><span class="pic-"></span></div>
+		</div>
+		<div class="pointer"><span class="pic-"></span></div>
+		<div class="title"><span>{title}</span></div>
+	</div>	
+	</tpl>
+</tpl>
+<script>
+var BaseDashBoardHTML = t_panel.renderData("", {items : DashboardItems});
+function getValue(value, unit, type){
+	var html = null;
+	var str = value.toString();
+	if(type == "cpu"){
+		html = IX.loop(str.split(""), "", function(acc, item, idx){
+			if(item == ".")
+				acc += '<span class="point"></span>';
+			else
+				acc += '<span class="num'+ item +'"></span>';
+			return acc;
+		});
+		html += '<span class="'+ unit +'"></span>';
+	}else{
+		html = IX.loop(str.split(""), "", function(acc, item, idx){
+			if(item == ".")
+				acc += '<span class="points"></span>';
+			else
+				acc += '<span class="nums'+ item +'"></span>';
+			return acc;
+		});
+		html += '<span class="'+ unit +'s"></span>';
+	}
+	return html;
+}
+
+function Dashboard(el, cfg){
+	var _curDeg = 0;
+	var _total = 1;
+	var valueEl = $XH.first(el, "info");
+	var pointerEl = $XH.first(el, "pointer");
+
+	return {
+		reset : function(total, used){
+			var titleEl = $XD.first($XH.first(el, "title"), 'span');
+			titleEl.innerHTML = cfg.title.replace("{total}", total);
+			valueEl.innerHTML = getValue(used, cfg.unit, cfg.type);
+
+			_total = Math.max(1, total);
+			_curDeg = 360 * used / _total;
+
+			setTimeout(function(){
+				refreshProgress(pointerEl, 360, _curDeg);
+			},Duration * 1000+100);
+			refreshProgress(pointerEl, 0, 360);
+		},
+		pointTo : function(value){
+			valueEl.innerHTML = getValue(value, cfg.unit, cfg.type);
+			var deg = 360 * value / _total;
+			refreshProgress(pointerEl, _curDeg, deg);
+			_curDeg = deg;
+		}
+	};
+}
+
+function DashBoards(container, dataCaller){
+	var dashboards = {};
+	var types = IX.map(DashboardItems, function(item){
+		var itemType = item.type;
+		dashboards[itemType]  = new Dashboard($XH.first(container, itemType), item);
+		return itemType;
+	});
+	function load(itemFn, failFn){
+		dataCaller(function(data){
+			IX.iterate(types, function(itemType){
+				itemFn(dashboards[itemType], data[itemType]);
+			});
+		}, function(data){
+			var qstr = window.location.href;
+			qstr = qstr.slice(qstr.length-4);
+			if(failFn)
+				return false;
+			if(qstr == "perf")
+				NV.Dialog.alert(data.err);
+		});
+	}
+	return {
+		init : function(){
+			load(function(item, data){item.reset.apply(null, data);}, null);
+		},
+		refresh: function(failFn){
+			load(function(item, data){item.pointTo(data[1]);}, failFn);
+		}
+	};
+}
+
+IX.ns("TNM.Lib");
+TNM.Lib.DashboardPanel = function(_container, dataCaller){
+	var container = $X(_container);
+	container.innerHTML = BaseDashBoardHTML.replaceAll("{total}", 0);
+	var dashboards = new DashBoards(container, dataCaller);
+	return dashboards;
+};
+</script>

@@ -1,0 +1,858 @@
+<script>
+var globalActionConfig = IXW.Actions.configActions;
+var ixwPages = IXW.Pages;
+var nvAlert = NV.Dialog.alert;
+
+var FaultLevels = TNM.Const.FaultLevels;
+var FaultFormats = TNM.Const.FaultFormats;
+
+var dataCaller = TNM.Global.sysCaller;
+var DeviceTypes = TCM.Const.DeviceTypes;
+var DeviceTypeNames = TCM.Const.DeviceTypeNames;
+var DeviceTypesInRack = [
+	"TNM", "TVS", "TAS", "TVR", "Storage",
+	"Coder", "Decoder", "Spliter", 
+	"HUB", "PDH", "FiberConvertor", "KVM", "PDU"
+];
+var MaxUnitInRack = TNM.Const.MaxUnitInRack;
+var PXPerUnit = TNM.Const.PXPerUnit;
+var PerRackWidth = 300; // 188 + 21
+var Duration = 3; //3sec
+
+function getMask(pos, size){
+	var _mask = 0;
+	for (var i=0;i<size; i++)
+		_mask += (1<<i);
+	return _mask<<pos;
+}
+var WholeMask = getMask(0, MaxUnitInRack);
+
+var RackDeviceImgs = null;
+function initRackDeviceImgs(){
+	IX.Net.loadFile(TNM.Global.rackDeviceDefintionUrl, function(txt){
+		var imgData = JSON.parse(txt);
+		var imgs = {};
+		IX.iterate(DeviceTypesInRack, function(type){
+			var _type = DeviceTypes[type];
+			//console.log("type: "+ _type, DeviceTypeNames[_type]);
+			imgs[_type] = imgData[DeviceTypeNames[_type]];
+		});
+		RackDeviceImgs = imgs;
+	});
+}
+var getRackImgUrl = TNM.Global.getRackDeviceImgUrl;
+function pickImg(devType, unit, level){ // level : 1-0,1-1, 2-0, 2-1
+	var fileName = $XP(RackDeviceImgs, devType + "." + unit + "U", "default-" + unit);
+	fileName += level?("-" + level):"";
+	//console.log("Get Rack Device Img:" + fileName, [devType, unit, level]); 
+	return getRackImgUrl(fileName + ".png");
+}
+
+var currentRackList = null;
+
+var showDialog = NV.Dialog.show;
+var hideDialog = NV.Dialog.hide;
+var confirmDialog = NV.Dialog.confirm;
+function _deleteUnits(cfg, okFn){
+	confirmDialog(cfg.title, "请确认是否" +  cfg.info + "？",  function(cbFn){
+		dataCaller(cfg.callerName, cfg.params, function(){
+			cbFn();
+			okFn();
+		});
+	});
+}
+</script>
+<tpl id="editDevice">
+	<ul class="rack-device">
+		<li><span class="label">车站</span><span class="text">{siteName}</span></li>
+		<li><span class="label">机柜</span><span class="text">{rackName}</span></li>
+		<li><span class="label">选择设备</span>{deviceCombo}</li>
+		<li class="pos"><span class="label">机柜位置</span>{stxPosCombo}<span class="sepLine">－－</span>{endPosCombo}</li>
+	</ul>
+</tpl>
+<script>
+/** 
+	device : {id, name, type, pos, size}  || {pos, size} //device.id ==undefined : add Device into Rack
+	siteId,
+	rack : Rack()
+ */ 
+function editRackDeviceDialog(device, siteId, rack){
+	var mask = rack.getMask();
+	var rackId = rack.getId();
+	var ifNew = !("id" in device);
+	var deviceId = ifNew ? null: device.id;
+	var siteName = TCM.LineInfo.getSiteName(siteId);
+	var items = ifNew?[]:[device];
+
+	var validPos = IX.loop(mask,[], function(acc, item, idx){
+		if (item === -1 || (!ifNew && item==deviceId))
+			acc.push({id:idx+1, name:idx+1});
+		return acc;
+	});
+	if (validPos.length===0)
+		return nvAlert("机柜中没有可以添加设备的位置！");
+
+	function getComboHTML(id, items, defPos){
+		var item = isNaN(defPos) ? items[0] : {id:defPos,name:defPos};
+		return NV.Lib.getComboHTML(id, {
+			value : item.id,
+			valueText: item.name,
+			items : items
+		});
+	}
+	var tpldata = {
+		siteName : siteName,
+		rackName : rack.getName(),
+		deviceCombo : "",
+		stxPosCombo : getComboHTML("stxPosInRack", validPos, device.pos+1),
+		endPosCombo : getComboHTML("endPosInRack", validPos, device.pos+1+device.size-1)
+	};
+	function addDevice(params, _device, cbFn){
+		if(params.size>12){
+			nvAlert("一个设备最多占用12U！");
+			return false;
+		}
+		dataCaller("addDevice", params, function(){
+			rack.addDevice(_device);
+			cbFn();
+		});
+	}
+	function moveDevice(params, _device, cbFn){
+		if(params.size>12){
+			nvAlert("一个设备最多占用12U！");
+			return false;
+		}
+		dataCaller("moveDevice", params, function(){
+			rack.move(_device);
+			cbFn();
+		});
+	}
+	function _okFn(){
+		var newDeviceId = $X('device4Rack').value;
+		var stxPos = $X('stxPosInRack').value-1, endPos = $X('endPosInRack').value-1;
+
+		for (var i=stxPos; i<=endPos; i++){
+			if (mask[i] == -1 || (!ifNew && mask[i]==deviceId))
+				continue;
+			return nvAlert("请重新选择合适的机柜位置，选中的机柜位置已被其他设备占用！");
+		}
+		var pos = Math.min(stxPos, endPos), size = Math.max(stxPos, endPos)-pos + 1;
+
+		if (!ifNew && deviceId == newDeviceId && device.pos == pos && device.size == size)
+			// nothing changed!
+			return hideDialog();
+
+		var params = {
+			siteId :siteId, 
+			deviceId : newDeviceId,
+			rackId : rackId,
+			pos : pos,
+			size : size
+		};
+		var newDeviceIdx = IX.Array.indexOf(items, function(d){return d.id == newDeviceId;});
+		var _device = currentRackList.newDevice(IX.inherit(items[newDeviceIdx], {
+			pos : pos,
+			size : size
+		}));
+
+		if (ifNew)
+			return addDevice(params, _device, hideDialog);
+		if (deviceId == newDeviceId)
+			return moveDevice(params, _device, hideDialog);
+		NV.Dialog.confirm("更换设备确认", "您选择了新的设备，原设备将从该机柜中移除，是否确定？", function(){
+			dataCaller("removeDevice", {siteId:siteId,rackId:rackId, deviceId : deviceId}, function(){
+				rack.remove(deviceId);
+				addDevice(params, _device, hideDialog);
+			});
+		});
+	}
+
+	dataCaller("getDevicesNotInRack", {siteId : siteId}, function(devices){//[{id,name, type, size}]
+		items = items.concat(devices);
+		if (items.length===0)
+			return nvAlert("没有可以添加到机柜的设备！");
+
+		tpldata.deviceCombo = getComboHTML("device4Rack", items);
+		showDialog({
+			clz : "editDeviceInRack",
+			title : ifNew?"新增设备入机柜":"修改机柜中的设备",
+			content :t_editDevice.renderData("",tpldata),
+			listen : {ok : _okFn}
+		});
+	});
+}
+
+</script>
+<tpl id="board">
+	<li id="board-{id}" class="board" style="top:{top}px;">
+		<a data-href="$rack.add" data-key="{idx}"></a>
+	</li>
+</tpl>
+<tpl id="device">
+	<li id="device-{id}" class="device level{level} U{unit}" data-key="{id}" style="height:{height}px;top:{top}px;">
+		<a class="img" data-href="$rack.click" data-key="{id}"><img src="{img}"></a>
+		<div class="mask">
+			<a class="icon-edit" data-href="$rack.edit" data-key="{id}"></a>
+			<a class="icon-delete" data-href="$rack.delete" data-key="{id}"></a>
+		</div>
+		<a class="fault" data-href="$rack.fault" data-key="{id}" data-level="{level}">
+			<img class="max" src="{maxFaultImg}">
+			<img class="min" src="{minFaultImg}">
+		</a>
+	</li>
+</tpl>
+<script>
+function Board(rackId, pos){
+	var id = rackId + "-" + pos;
+	var html = t_board.renderData("", {id:id, idx : pos, top: pos *PXPerUnit});
+	return {
+		isDevice : function(){return false;},
+		getIdx : function(){return pos;},
+		getHTML : function(){return html;},
+		remove : function(){
+			var el = $X('board-' + id);
+			if (el) el.parentNode.removeChild(el);
+		}
+	};
+}
+/* devInfo : {id, name, type, rackId, pos, size, level} */
+function Device(devInfo){
+	var deviceId = devInfo.id;
+	var unit = devInfo.size || 1, devType = devInfo.type, pos = devInfo.pos||0;
+	var level = 0; 
+	var tpldata = {
+		id : deviceId,
+		unit : unit,
+		height : unit * PXPerUnit,
+		top: devInfo.pos * PXPerUnit,
+		img : pickImg(devType, unit)
+	};
+
+	function _refresh(){
+		var el = $X('device-' + deviceId);
+		if (!el) return;
+		var faultEl = $XH.first(el, "fault");
+		var maxImg = $XH.first(faultEl, "max");
+		var minImg = $XH.first(faultEl, "min");
+		maxImg.src = tpldata.maxFaultImg;
+		minImg.src = tpldata.minFaultImg;
+		$XD.setDataAttr(faultEl, "level", level);
+		el.className = "device level" + level + " U" + unit;
+	}
+	function _setLevel(s){
+		level = s ;
+		tpldata = IX.inherit(tpldata, {
+			level : level,
+			minFaultImg : level===0?"": pickImg(devType, unit, level+ "-0"),
+			maxFaultImg : level===0?"": pickImg(devType, unit, level+ "-1")
+		});
+		_refresh();
+	}
+	_setLevel($XP(devInfo, "level", 0));
+	return {
+		getId : function(){return deviceId;},
+		isDevice : function(){return true;},
+		getIdx : function(){return devInfo.pos;},
+		getHTML: function(){return t_device.renderData("", tpldata);},
+		getRange : function(){ return [pos, pos + unit-1];}, //1U: [10,10]; 3U:[10, 12]
+		getAttr : function(){ return devInfo;},
+		move :function(){
+			var el = $X('device-' + deviceId);
+			if (!el)
+				return;
+			el.style.top = tpldata.top + "px";
+			el.style.height = tpldata.height + "px";
+		},
+		remove : function(){
+			var el = $X('device-' + deviceId);
+			if (el) el.parentNode.removeChild(el);
+		},
+		refresh: _refresh,
+		setLevel: _setLevel,
+		clearLevel : function(){_setLevel(0);}
+	};
+}
+/* rackInfo : {id, name} */
+function Rack(rackInfo, devices){
+	var id = rackInfo.id;
+	var mask = IX.Array.init(MaxUnitInRack,-1);
+	var blocks = [];
+	var i;
+
+	function maskDevice(device){
+		var range = device.getRange();
+		var deviceId = device.getId();
+		for (var k=range[0]; k<range[1]+1; k++)
+			mask[k] = deviceId;
+		return range[0];
+	}
+
+	IX.iterate(devices, function(device){
+		blocks.push(device);
+		maskDevice(device);
+	});
+	for (i=0; i<MaxUnitInRack; i++) {
+		if (mask[i] == -1)
+			blocks.push(new Board(id, i));
+	}
+
+	function _remove(deviceId){
+		jQuery("#device-" + deviceId).remove();
+		var html = [];
+		for (i=0; i<MaxUnitInRack; i++){
+			if (mask[i]!=deviceId)
+				continue;
+			mask[i] = -1;
+			var board = new Board(id, i);
+			html.push(board.getHTML());
+			blocks.push(board);
+		}
+		jQuery(html.join("")).appendTo('#rack-' + id + " ul");
+	}
+
+	function _add(device){
+		var pos = maskDevice(device);
+		blocks = IX.loop(blocks, [], function(acc, block){
+			var idx = block.getIdx();
+
+			if (block.isDevice() || mask[idx]===-1)
+				acc.push(block);
+			else if (idx == pos)
+				acc.push(device);
+			else 
+				block.remove();
+			return acc;
+		});
+		jQuery(device.getHTML()).appendTo('#rack-' + id + " ul");
+	}
+	function _move(device){
+		var range = device.getRange();
+		var deviceId = device.getId();
+
+		var boardHTML = [], board = null;
+		for (i=0; i<MaxUnitInRack; i++){
+			if (mask[i]!=deviceId && mask[i]!== -1)
+				continue;
+			if (mask[i] == -1 && i>=range[0] && i<=range[1]) {
+				board = new Board(id, i);
+				board.remove();
+				mask[i] = deviceId;
+				continue;
+			}
+			if (mask[i] == deviceId && !(i>=range[0] && i<=range[1])) {
+				board = new Board(id, i);
+				boardHTML.push(board.getHTML());
+				blocks.push(board);
+				mask[i] = -1;
+			}
+		}
+		device.move();
+		blocks = IX.loop(blocks, [], function(acc, block){
+			var idx = block.getIdx();
+			if (block.isDevice() || mask[idx] == -1)
+				acc.push(block);
+			return acc;
+		});
+
+		jQuery(boardHTML.join("")).appendTo('#rack-' + id + " ul");
+	}
+
+	return {
+		getMask : function(){return mask;},
+		getId : function(){return id;},
+		getName : function(){return rackInfo.name;},
+		setName : function(_name){rackInfo.name = _name;},
+		getTpldata : function(){
+			return IX.inherit(rackInfo, {html : IX.map(blocks, function(block){
+				return block.getHTML();
+			}).join("")});
+		},
+		trySetDevice : function(deviceId, stx, endx){
+			for (i=stx; i<endx; i++)
+				if(mask[i]!==-1  && mask[i] != deviceId) return false;
+			return true;
+		},
+		addDevice : _add,
+		move : _move,
+		remove : _remove
+	};
+}
+</script>
+<tpl id="panel">
+	<img src="{bgImg}" />
+	<div class="racks">
+		<div class="area-l"><a data-href="$racks.prev" class="btn-prev"></a><span class="pic-"></span></div>
+		<div class="area-c"><div class="view">
+			<tpl id="racks"><div id="rack-{id}" class="rack-area">
+				<div class="rack-title">
+					<a class="nv-checkbox" data-href="$racks.check" data-key="{id}"><span class="ixpic-"></span><span title="{name}">{name}</span></a>
+					<a data-href="$racks.edit", data-key="{id}"><span class="edit-rack"></span></a>
+					<span class="hidden"></span>
+				</div>
+				<div class="rack"><ul data-key="{id}">{html}</ul></div>
+			</div></tpl>
+			<div class="addrack"><a data-href="$racks.add" class="pic-"></a></div>
+		</div></div>
+		<div class="area-r"><a data-href="$racks.next" class="btn-next"></a><span class="pic-"></span></div>
+		<a data-href="$racks.delete" class="btn-delete disabled"></a>
+	</div>
+</tpl>
+<tpl id="infoPanel">
+	<ul class="rack-device"><tpl id="items"><li class="{clz}">
+		<span class="label">{label}</span>
+		<span class="text">{text}</span>
+	</li></tpl></ul>
+</tpl>
+<script>
+var PanelItems = {
+	name : "设备名称",
+	provider : "厂家",
+	ip : "IP地址",
+	style : "型号",
+	desc:"备注"
+};
+function getDevicePanelHTML(devInfo){
+	var items = IX.map("name,provider,ip,style,desc".split(","), function(name){ return {
+		clz : name,
+		label : PanelItems[name],
+		text : IX.encodeTXT(devInfo[name])
+	};});
+	if (devInfo.level >0) 
+		items.unshift({
+			clz : "level" + devInfo.level,
+			label : FaultLevels[devInfo.level]+ "告警",
+			text : '<a data-href="' + ixwPages.createPath("fault-device", {id:devInfo.id}) + '">'  + (FaultFormats[devInfo.code] || FaultFormats["-1"]) + '</a>'
+		});
+	
+	return t_infoPanel.renderData("", {items : items});
+}
+var popTrigger = null;
+var popBodyRefreshFn = IX.emptyFn;
+
+function initPopTrigger(){
+	if (popTrigger) return;
+	popTrigger = new IXW.Lib.PopTrigger({
+		id : "racks-pop",
+		triggerMode : "mouseover",
+		position: "right",
+		ifKeepPanel : function(target, triggerEl){
+			console.log("keep:", target, triggerEl);
+			return (triggerEl && !!$XD.isAncestor(target, triggerEl));
+		},
+		bodyRefresh : function(bodyEl, triggerEl){
+			popBodyRefreshFn(bodyEl, triggerEl);
+		}
+	});
+}
+function RackList(container, sId) {
+	var _siteId = sId, loaded = false;
+	var rackHT = new IX.IListManager();
+	var deviceHT = new IX.IListManager();
+
+	var faultDeviceIds = [];
+
+	popBodyRefreshFn = function(bodyEl, triggerEl){
+		var deviceId= $XD.dataAttr(triggerEl, "key");
+		dataCaller("getDeviceDetail", {siteId : _siteId, deviceId :deviceId}, function(devInfo){
+			bodyEl.innerHTML = getDevicePanelHTML(devInfo);
+		});
+	};
+	initPopTrigger();
+
+	function _refreshFaultStatus(devices){
+		var ids = faultDeviceIds;
+
+		faultDeviceIds = IX.map(devices, function(d){
+			var deviceId = d.id;
+			ids = IX.Array.remove(ids, deviceId);
+			var device = deviceHT.get(deviceId);
+			if (device)
+				device.setLevel(d.level);
+			return deviceId;
+		});
+
+		IX.iterate(ids, function(deviceId){
+			var device = deviceHT.get(deviceId);
+			if (device)
+				device.clearLevel();
+		});
+	}
+	function applyDevice(devInfo){
+		var deviceId = devInfo.id;
+		var device = new Device(devInfo);
+		deviceHT.register(deviceId, device);
+		if (devInfo.level>0)
+			faultDeviceIds.push(deviceId);
+		return device;
+	}
+
+	function _addRack(rackInfo, devices) {
+		var rack = new Rack(rackInfo, devices);
+		rackHT.register(rackInfo.id, rack);
+		var html = t_panel.renderData("racks", rack.getTpldata());
+		var addRackEl =  jQuery($X(container)).find(".addrack");
+		jQuery(html).insertBefore(addRackEl);
+	}
+	function _removeRack(rackId){
+		var flag;
+		if(rackHT.getFirst().getId()==rackId){
+			flag=jQuery("#rack-" + rackId).next().attr("id");
+		}
+		rackHT.remove(rackId);
+		jQuery("#rack-" + rackId).remove();
+		jQuery("#" + flag).css("margin-left","0");
+	}
+
+	function listenOnRacks(racksEl){
+		function onEvent4Device(e, fn4Edit, fn4View){
+			var liEl =  $XH.ancestor(e.target, "device");
+			if (liEl)
+				($XH.hasClass(racksEl, "editing")? fn4Edit : fn4View)(liEl);
+		}
+		IX.bind(racksEl, {
+			mouseover : function(e){
+				onEvent4Device(e, function(liEl){
+					$XH.addClass(liEl, "hover");
+				}, function(liEl){
+					popTrigger.trigger(liEl);
+				});
+			},
+			mouseout : function(e){
+				onEvent4Device(e, function(liEl){
+					$XH.removeClass(liEl, "hover");
+				}, IX.emptyFn);
+			}
+		});
+	}
+
+	function refreshRacks(racks){
+		rackHT.clear();
+		deviceHT.clear();
+		faultDeviceIds = [];
+
+		var containerEl = $X(container);
+		if (containerEl) {
+			containerEl.innerHTML = t_panel.renderData("", {
+				bgImg : TNM.Global.rackBackgroundImg,
+				racks : []
+			});
+			listenOnRacks($XH.first(containerEl, "racks"));
+		}
+		IX.iterate(racks, function(rackData){
+			_addRack({
+				id: rackData.id, 
+				name : rackData.name
+			}, IX.map(rackData.devices, applyDevice));
+		});
+	}
+
+	var rackWidth = 0, numRacksInPanel = 0, firstRackIdxInPanel = 0;
+	function _enableBtn(viewEl, btnName, ifEnable){
+		var btnEl = jQuery(viewEl).parents(".racks").find("." + btnName);
+		btnEl[ifEnable?"addClass": "removeClass"]("visible");
+	}
+	function resetPos(viewEl, total,  _pos){
+		var maxPos = Math.max(0, total-numRacksInPanel);
+		var pos = Math.min(_pos, maxPos);
+
+		firstRackIdxInPanel = pos;
+		viewEl.style.marginLeft = (0-pos * rackWidth) +"px";
+		_enableBtn(viewEl, "btn-prev", pos > 0);
+		_enableBtn(viewEl, "btn-next", pos < maxPos);
+	}
+	function resetPosEx(viewEl, total, _pos){
+		resetPos(viewEl, total,  _pos);
+		viewEl.style.width = total * rackWidth + "px";
+		$XH[total > numRacksInPanel ? "addClass" : "removeClass"]($XH.ancestor(viewEl, "racks"), "multi");
+	}
+	function _resize(areasEl, _width,  total){
+		var width = _width - 256; // 256 = 118 *2 + 10* 2 (area-l + area-r + PaddingL + PaddingR)
+		areasEl.style.width = width + "px";
+
+		var n = Math.floor((width+100) / (PerRackWidth + 100));
+		var margin = Math.floor((width - PerRackWidth) / Math.max(1, n-1)) - PerRackWidth;
+		if(width>1000&&width<1300){
+			margin = Math.max(85, Math.min(margin, 90));
+		}
+		if(width>1300){
+			margin = Math.max(70, Math.min(margin, 70));
+		}
+		if(width<900){
+			margin = Math.max(85, Math.min(margin, 180));
+		}
+		rackWidth = PerRackWidth + margin;
+		numRacksInPanel = Math.floor((width+margin)/rackWidth);
+
+		var viewEl = $XH.first(areasEl, "view");
+		resetPosEx(viewEl, total, firstRackIdxInPanel);
+		jQuery(viewEl).children("div").not(":first-child").css("margin-left", margin + "px");
+
+		popTrigger.hide();
+	}
+
+	function getRacks(fn){
+		var racksEl = $XH.first($X(container), "racks");
+		if(racksEl) fn(racksEl, racksEl.offsetWidth, $XH.first(racksEl, "area-c"));
+	}
+	function getTotal(racksEl, isEdit){
+		var hasAddBtn = racksEl?$XH.hasClass(racksEl, "editing") : isEdit;
+		return rackHT.getSize() + (hasAddBtn?1:0);
+	}
+	function resetMode(isEdit){
+		getRacks(function(racksEl, racksWidth, areasEl){
+			$XH[isEdit?"addClass":"removeClass"](racksEl, "editing");
+			if(isEdit){jQuery(".nv-checkbox").find(".ixpic-").css("display","inline-block");jQuery(".addrack").css("display","inline-block");}
+			else{jQuery(".nv-checkbox").find(".ixpic-").css("display","none");jQuery(".addrack").css("display","none");}
+			_resize(areasEl, racksWidth, getTotal(null, isEdit));
+		});
+	}
+
+	function reslide(ifAdd){
+		getRacks(function(racksEl, racksWidth, areasEl){
+			_resize(areasEl, racksWidth, getTotal(racksEl));
+		});
+	}
+	function _getAreas(fn){
+		getRacks(function(racksEl, racksWidth, areasEl){
+			fn(areasEl, getTotal(racksEl));
+		});
+	}
+
+	return {
+		resetSiteId : function(siteId){
+			_siteId = siteId;
+			loaded = false;
+		},
+		getSiteId : function(){return _siteId;},
+		getDevice : function(deviceId){return deviceHT.get(deviceId);},
+		newDevice : function(devInfo){
+			var device = new Device(devInfo);
+			deviceHT.register(devInfo.id, device);
+			return device;	
+		},
+		getRack : function(rackId){return rackHT.get(rackId);},
+		newRack : function(fn){
+			var rackInfo = {siteId : _siteId, name : "机柜" + rackHT.getSize()};
+			dataCaller("addRack", rackInfo, function(rackId){
+				rackInfo.id = rackId.id;
+				_addRack({id:rackId.id, name:rackId.name}, []);
+				reslide(true);
+				if(jQuery(".area-c").width()<1000&&rackHT.getSize()>=2){
+					jQuery(".btn-next").append("<span class='click'>Click</span>");
+					jQuery(".click").click();
+					jQuery(".click").remove();
+				}
+				if(rackHT.getSize()>2){
+					jQuery(".btn-next").append("<span class='click'>Click</span>");
+					jQuery(".click").click();
+					jQuery(".click").remove();
+				}
+				var nameEl = $XH.first($XH.first($X('rack-' + rackId.id), "rack-title"), "name");
+				fn(nameEl, rackId.id);
+			});
+		},
+		removeRacks : function(rackIds){
+			IX.iterate(rackIds, _removeRack);
+			reslide(false);
+		},
+
+		checkFaultStatus : function(failFn){
+			dataCaller("getDeviceFaultStatus", {siteId : _siteId}, _refreshFaultStatus, failFn);
+		},
+		refresh : function(isEdit){
+			if (loaded) {
+				resetMode(isEdit);
+				return deviceHT.iterate(function(device){device.refresh();});
+			}
+			dataCaller("getRacks", {siteId:_siteId}, function(racks){
+				loaded = true;
+				refreshRacks(racks);
+				resetMode(isEdit);
+			});
+		},
+		resize : function(){
+			_getAreas(function(areasEl, total){
+				_resize(areasEl, areasEl.parentNode.offsetWidth, total);
+			});
+		},
+		slide : function(step){ // -1/1 prev/next rack
+			_getAreas(function(areasEl, total){
+				resetPos($XH.first(areasEl, "view"), total, firstRackIdxInPanel+ step);
+			});
+		}
+	};
+}
+
+
+function editRackName(el, rackId){
+	var rack =  currentRackList.getRack(rackId);
+	if (!rack) return;
+	var rackName = rack.getName();
+	var spanEl;
+	$XH.addClass(el, "hidden");
+	if(el){
+		$XH.addClass(el.previousElementSibling, "hidden");
+		spanEl= $XD.next(el, "span");
+		spanEl.innerHTML="<input class='editName' type='text' maxlength='20'>";
+	} 
+	var inputEl =$XD.first(spanEl, "input");
+	if(inputEl){
+		inputEl.value = rackName;
+	}
+	$XH.removeClass(spanEl, "hidden");
+
+	function _refresh(v){
+		//el.innerHTML = IX.encodeTXT(v)+"<span class='edit-rack'>";
+		//el.innerHTML = "<span class='edit-rack'>";
+		el.previousSibling.children[1].innerHTML=IX.encodeTXT(v);
+		jQuery(el.previousSibling.children[1]).attr("title",IX.encodeTXT(v));
+		$XH.removeClass(el.previousElementSibling, "hidden");
+		$XH.removeClass(el, "hidden");
+		spanEl.innerHTML="";
+		$XH.addClass(spanEl, "hidden");
+		rack.setName(v);
+	}
+	function _post(v){
+		if (v == rackName)
+			return _refresh(v);
+		dataCaller("editRack", {
+			siteId : currentRackList.getSiteId(),
+			id : rackId,
+			name : v
+		}, function(){
+			_refresh(v);
+		});
+	}
+	IX.bind(inputEl, {
+		blur : function(){
+			_post((inputEl.value).trim());
+		},
+		keydown :function(e){
+			if (e.which == 8) 
+				IX.Util.Event.stopPropagation(e);
+			if (e.which == 13) 
+				inputEl.blur();
+		}
+	});
+	if(inputEl){
+		inputEl.focus();
+	}
+}
+function _actionOnRack(el, fn){
+	var rack =  currentRackList.getRack($XD.dataAttr($XD.ancestor(el, "ul"), "key"));
+	if(rack)fn(rack);
+}
+globalActionConfig([["rack.add",function(params,el){
+	_actionOnRack(el, function(rack){
+		editRackDeviceDialog({pos:params.key-0,size:1}, currentRackList.getSiteId(), rack);
+	});
+
+}],["rack.edit",function(params,el){
+	_actionOnRack(el, function(rack){
+		var device = currentRackList.getDevice(params.key);
+		if (!device) return;
+		editRackDeviceDialog(device.getAttr(), currentRackList.getSiteId(), rack);
+	});
+
+}],["rack.delete",function(params,el){
+	_actionOnRack(el, function(rack){
+		_deleteUnits({
+			title : "从机柜中移出设备",
+			info: "从当前机柜移出该设备",
+			callerName : "removeDevice",
+			params : {siteId:currentRackList.getSiteId(),rackId:rack.getId(), deviceId : params.key}
+		}, function(){rack.remove(params.key);});
+	});
+
+}],["rack.click",function(params,el){
+	if(popTrigger) popTrigger.hide();
+	//ixwPages.load(ixwPages.createPath("device-issue", {id: params.key}));
+
+}],["rack.fault",function(params,el){
+	if(popTrigger) popTrigger.hide();
+	var siteId=jQuery("#site4Rack").attr("value");
+	ixwPages.load(ixwPages.createPath("fault-device", {id: params.key,siteId:siteId}));
+}],["racks.check",function(params,el){
+	var racksEl = jQuery(el).parents(".racks");
+	if (!racksEl.hasClass("editing")) return;
+
+	$XH.toggleClass(el, "selected");
+	$XH.toggleClass(el.previousElementSibling, "selected");
+	var ifSelected = racksEl.find(".nv-checkbox.selected").length>0;
+	racksEl.find(".btn-delete")[ifSelected?"removeClass":"addClass"]("disabled");
+
+}],["racks.add",function(params,el){
+	currentRackList.newRack(function(_el, rackId){
+		editRackName(_el, rackId);
+	});
+
+}],["racks.prev",function(params,el){
+	currentRackList.slide(-1);
+
+}],["racks.next",function(params,el){
+	currentRackList.slide(1);
+
+}],["racks.edit",function(params,el){
+	var racksEl = $XH.ancestor(el, "racks");
+	if ($XH.hasClass(racksEl, "editing"))
+		editRackName(el, params.key);
+
+}],["racks.delete",function(params,el){
+	if ($XH.hasClass(el, "disabled"))
+		return;
+	var ids = IX.map(jQuery(el).parents(".racks").find(".nv-checkbox.selected"), function(chkEl){
+		return $XD.dataAttr(chkEl, "key");
+	});
+	_deleteUnits({
+		title : "从当前单位移除机柜",
+		info: "从当前单位移除选中的机柜",
+		callerName : "removeRacks",
+		params : {siteId:currentRackList.getSiteId(), ids : ids}
+	}, function(){
+		currentRackList.removeRacks(ids);
+		jQuery("div.editing").find("a.btn-delete").addClass("disabled");
+	});
+
+}]]);
+
+IX.ns("TNM.Lib");
+TNM.Lib.RacksPanel = function(container, siteId){
+	var isEdit = false;
+	var _siteId = siteId;
+
+	if (!RackDeviceImgs)
+		initRackDeviceImgs();
+
+	currentRackList = new RackList(container, siteId);
+	function _refresh(){
+		var el = $X(container);
+		if (!el)
+			return;
+		IX.checkReady(function(){return !!RackDeviceImgs;},function(){
+			currentRackList.refresh(isEdit);
+		}, 500);
+	}
+
+	return {
+		check : function(failFn){
+			if (currentRackList && !isEdit && $XH.first($X(container), "racks"))
+				currentRackList.checkFaultStatus(failFn);
+		},
+		resetMode : function(_mode){
+			isEdit = _mode=="edit";
+			_refresh();
+		},
+		resetSite : function(sId){
+			currentRackList.resetSiteId(sId);
+			_refresh();
+		},
+		resize : function(){
+			currentRackList.resize();
+		},
+		clear: function(){
+			if(popTrigger) popTrigger.hide();
+		},
+		refresh : _refresh
+	};
+};
+</script>

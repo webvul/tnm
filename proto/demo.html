@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>demo4audio</title>
+</head>
+<body>
+	<div id="body"></div>
+</body>
+<!-- Basic JS lib required for ets and common facilities -->
+<script src="../src/lib/ix.js"></script>
+<!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+<script src="../src/lib/jquery-2.1.1.js"></script>
+<!-- Include all compiled plugins (below), or include individual files as needed -->
+<script src="../src/bootstrap/js/bootstrap.js"></script>
+
+
+<script src="../src/lib/ixw.js"></script>
+<script src="../src/lib/ixwui.js"></script>
+<script src="../src/lib/alertor.js"></script>
+
+
+<script>
+var alertor = new IX.Alertor.Audio({
+	list: IX.map("0".multi(Math.floor(Math.random()*100)).split(""), function(item, idx){
+		return {level: (idx % 2 === 0) ? 1 : 0};
+	})
+});
+alertor.start();
+</script>
+</html>

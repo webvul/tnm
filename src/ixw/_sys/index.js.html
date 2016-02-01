@@ -1,0 +1,136 @@
+<script>
+var globalActionConfig = IXW.Actions.configActions;
+
+var sysclz = null, checkFn = IX.emptyFn, resizeFn = IX.emptyFn;
+function sysCond(){
+	return sysclz && $XH.hasClass(document.body, sysclz);
+} 
+var sysChecker = new TNM.Util.PeriodicChecker(sysCond, function(failFn){
+	checkFn(failFn);
+});
+$Xw.bind({"resize" : function(){
+	if (sysCond()) resizeFn();
+}});
+function startChecker(clz, view){
+	sysChecker.stop();
+	sysclz = clz;
+	resizeFn = view.resize;
+	checkFn = view.check;
+	sysChecker.start();
+}
+
+</script>
+<tpl id="siteLine">
+	<div class="nv-title">线路图</div>
+	<div id="container"></div>
+</tpl>
+<script>
+function showSysLine(cbFn){
+	$X('body').innerHTML = t_siteLine.renderData("", {});
+	var siteLine = new TNM.Lib.SitesPanel("container");
+	jQuery("#container").css({
+		backgroundImage: "url(" + TNM.Global.lineBackgroundUrl + ")"
+	});
+	siteLine.refresh();
+	startChecker("sys-line", siteLine);
+}
+
+</script>
+<tpl id="racks">
+	<div class="nv-box">
+		<div class="nv-title">
+			<div class="tabs">
+				<a class="focused" data-href="$sys.rack.switch" data-key="view"><span>查看机柜</span></a>
+				<a data-href="$sys.rack.switch" data-key="edit"><span>编辑机柜</span></a>
+			</div>{html}
+		</div>
+		<div id="container"></div>
+	</div>	
+</tpl>
+<script>
+var currentRacks = null;
+globalActionConfig([["sys.rack.switch",function(params,el){
+	if (!currentRacks || $XH.hasClass(el, "focused"))
+		return;
+	currentRacks.resetMode(params.key);
+	$XH.removeClass($XH.first(el.parentNode, "focused"), "focused");
+	$XH.addClass(el, "focused");
+
+}],["sys.rack.pick",function(params,el){
+	var id = params.key, name = el.innerHTML;
+	var dropdownEl = $XH.ancestor(el, "dropdown");
+	if (!dropdownEl) return;
+	var inputEl = $XD.first(dropdownEl, "input");
+	if (inputEl.value == id)
+		return;
+
+	inputEl.value = id;
+	var nameEl = $XH.first($XH.first(dropdownEl, "dropdown-toggle"), "name");
+	nameEl.innerHTML = name;
+	if (!currentRacks)
+		return;
+	currentRacks.resetSite(id);
+
+}]]);
+
+function showSysRack(siteId, cbFn){
+	var siteHT = TCM.LineInfo.getSites();
+	var sites = IX.map(siteHT.getAll(), function(site){return {
+		id : site.id,
+		name : site.name,
+		action : "sys.rack.pick"
+	};});
+	var site = siteHT.get(siteId || TNM.Env.getSession().getSiteId());
+	$X('body').innerHTML = t_racks.renderData("",{
+		focused : "editing",
+		html :  NV.Lib.getComboHTML("site4Rack", {
+			value : site.id,
+			valueText: site.name,
+			items :sites
+		})
+	});
+	if(!document.documentMode){
+		jQuery("body").addClass("isNotIE");
+	}
+	currentRacks = new TNM.Lib.RacksPanel("container", site.id);
+	currentRacks.refresh();
+	startChecker("sys-rack",currentRacks);
+}
+
+</script>
+<tpl id="topo">
+	<div class="nv-box">
+		<div class="nv-title">拓扑结构</div>
+		<div id="container"></div>
+	</div>	
+</tpl>
+<script>
+function showTopological(cbFn){
+	$X('body').innerHTML = t_topo.renderData("", {});
+	var topo = new TNM.Lib.TopoPanel("container");
+	topo.refresh();
+	startChecker("sys-topo",topo);
+}
+function switchOut(currentContext, nextContext){
+	var pageName = currentContext.name;
+	jQuery("#container").remove();
+	if(pageName == "sys-rack")
+		currentRacks.clear();
+}
+
+IX.ns("TNM.Sys");
+TNM.Sys.init = function(pageCfg, pageParams, cbFn){
+	pageCfg.switchOut = switchOut;
+	switch(pageCfg.name){
+	case "sys-line":
+		showSysLine(cbFn);
+		break;
+	case "sys-rack":
+		showSysRack(pageParams.id, cbFn);
+		break;
+	case "sys-topo":
+		showTopological(cbFn);
+		break;
+	}
+};
+</script>

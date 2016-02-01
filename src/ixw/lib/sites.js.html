@@ -1,0 +1,165 @@
+<script>
+var globalActionConfig = IXW.Actions.configActions;
+var ixwPages = IXW.Pages;
+var overviewTransform = IX.CSSVendorName + 'transform:scale({deg});' + 'top: {top}';
+var sysCaller = TNM.Global.sysCaller;
+</script>
+
+<tpl id="site">
+<li class="site">
+	<a class="{levelClz}" data-idx="{idx}" data-key="{key}" data-href="$site.click">
+		<div class="center"></div>
+		<div class="inside"></div>
+		<div class="outside"></div>
+		<div class="text">{name}</div>
+	</a>
+</li>
+</tpl>
+
+<tpl id="line">
+	<ul id="siteLine">
+		<li class="line"></li><tpl id="items">
+		<use id=".site" data='{key: "{id}", levelClz: "level{level}"}'>
+	</tpl></ul>
+</tpl>
+
+
+<script>
+globalActionConfig([["site.click", function(params, el, evt){
+	if($XH.hasClass(el, "level0"))
+		ixwPages.load(ixwPages.createPath("sys-rack", {id: params.key}));
+	else{
+		jQuery("#body").children().remove();
+		ixwPages.load(ixwPages.createPath("fault-site", {id: params.key}));
+		jQuery("#nav-sys").removeClass("active");
+		jQuery("#nav-fault").addClass("active");
+	}
+}]]);
+function sitesList(container){
+	var $sites = null;
+	var topList = {};
+	function onResize4Body(){
+		var rate = 1, baseValue = 0, body = document.getElementById("body");
+		var currentWidth = body.clientWidth;
+		if (currentWidth > 1200) {
+			rate = 1;
+			baseValue = Math.floor((currentWidth-160)/($sites.length-1));
+		} else {
+			rate = Math.floor(currentWidth/1200*100)/100;
+			if(rate<0.5)
+				rate = 0.5;
+			baseValue = Math.floor((1200-160)/($sites.length-1));
+		}
+		$X("siteLine").style.cssText = overviewTransform.replaceByParams({deg: rate, top: "50%"});
+		setPosition($sites, baseValue, rate);
+		showPush($sites, baseValue, rate);
+		setText(rate);
+		jQuery("#container").css({
+			height: body.clientHeight - 45 + "px"
+		});
+	}
+	function setText(rate){
+		jQuery("#siteLine .text").each(function(index, el) {
+			el.style.cssText = overviewTransform.replaceByParams({deg: 1/rate, top: topList[index] + "px"});
+		});
+	}
+	function setPosition($sites, baseValue){
+		var width = 50;
+		IX.iterate($sites, function(site, idx){
+			jQuery(site).css({left: baseValue*idx + 50 + "px"}); 
+			width += baseValue;	
+		});
+		jQuery(".line").css({
+			left: "60px",
+			width: width - baseValue - 50 + "px"
+		});
+	}
+	function resetPostion($sites, focusIdx, baseValue){
+		if (baseValue > 60) return;
+		var newValue = 64-baseValue;
+		var left = 0;
+		IX.iterate($sites, function(site, idx){
+			var min = focusIdx-idx;
+			var max = idx-focusIdx;
+			left = (focusIdx > idx ? Math.floor(50-newValue/Math.sqrt(Math.sqrt(min))) : Math.floor(50+newValue/Math.sqrt(Math.sqrt(max))))  + baseValue*idx;
+			if (focusIdx == idx) left = baseValue*idx + 50;
+			jQuery(site).css({left: left+"px"});
+		});
+		jQuery(".line").css({
+			left: Math.floor(60 - newValue/Math.sqrt(Math.sqrt(focusIdx))) + "px",
+			width: left - 50 + Math.floor(Number(focusIdx)? newValue/Math.sqrt(Math.sqrt(focusIdx)) : 5) + "px"
+		});
+	}
+	function showPush($sites, baseValue){
+		var $a = jQuery(".site").find("a");
+		var idx = null;
+		$a.unbind("hover");
+		$a.hover(function(){
+			idx = jQuery(this).attr("data-idx");
+			if(parseInt(idx) % 2 === 0)
+				jQuery(this).find(".text").css("top", topList[idx] - 25 + "px");
+			else
+				jQuery(this).find(".text").css("top", "65px");
+			resetPostion($sites, $XD.dataAttr(this, "idx"), baseValue);
+		}, function(){
+			idx = jQuery(this).attr("data-idx");
+			jQuery(this).find(".text").css("top", topList[idx] + "px");
+			setPosition($sites, baseValue);
+		});
+	}
+	function refreshFaultStatus(loopData){
+		IX.iterate(loopData, function(d, idx){
+			jQuery($sites[idx]).find("a").removeClass().addClass("level"+d.level);
+		});
+	}
+
+	function positionText(){
+		$sites = jQuery("#siteLine").find(".site");
+		for (var i = 0; i < $sites.length; i++) {
+			var top = jQuery($sites[i]).find(".ver-text").height();
+			if(i%2 === 0)
+				topList[i] = -1 * top - 25;
+			else
+				topList[i] = 45;
+		}
+	}
+	function _refrehLine(data){
+		if(!data)
+			return;
+		refreshFaultStatus(data);
+	}
+	function _show(data){
+		if(!data)
+			return;
+		var containerEl = $X(container);
+		if(!containerEl)
+			return;
+		containerEl.innerHTML = t_line.renderData("", {
+			items: TNM.Lib.verticalText(data)
+		});
+		positionText();
+		onResize4Body();
+	}
+	return {
+		refresh: function(){
+			sysCaller("getFault4Station", {}, _show);
+		},
+		refreshFaultStatus: function(failFn){
+			sysCaller("getFault4Station", {}, _refrehLine, failFn);
+		},
+		resize: function(){
+			onResize4Body();
+		}
+	};
+}
+IX.ns("TNM.Lib");
+TNM.Lib.SitesPanel = function(container){
+	var panel = new sitesList(container);
+	return IX.inherit(panel, {
+		check : function(failFn){
+			if (panel && $XD.first($X("container"), "ul")) 
+				panel.refreshFaultStatus(failFn);
+		}
+	});
+};
+</script>

@@ -1,0 +1,441 @@
+<script>
+var isFoundInArray = IX.Array.isFound;
+var ixwPages = IXW.Pages;
+var ixwActions = IXW.Actions;
+
+var DeviceTypeNames = TCM.Const.DeviceTypeNames;
+//var FaultLevels = TNM.Const.FaultLevels;
+var FaultFormats = TNM.Const.FaultFormats;
+
+var nvCache = (function(){
+	var _ls = window.localStorage;
+	return {
+		getItem : function(key){
+			return _ls.getItem(key) || null;
+		}, //getItem(key, isNotJSON)：取得key对应的值--null
+		setItem : function(key, value) {
+			_ls.setItem(key, value);
+		}, //setItem(key, value, isNotJSON):设置key对应的值
+		clear : function(){
+			_ls.clear();
+		}
+	};
+})();
+function SessionManager(data){
+	var sessionData = data;
+	var userName = $XP(data, "name", "");
+	var userId = $XP(data, "id", null);
+	var siteId = $XP(data, "siteId");
+	var site = $XP(data, "lineInfo");
+	nvCache.setItem("tnmSessionKey", siteId + "-" + userId);
+	return {
+		//_get: function(){return sessionData;},
+		hasAuth : function(){return userId !== null;},
+		getUserName : function(){return userName;},
+		getUserId : function(){return userId;},
+		getSiteId : function(){return siteId;},
+		getLineInfo : function(){return site;},
+		getSessionKey: function(){return siteId + "-" + userId;},
+		checkIfModuleEnabled : function(module){return true;}
+	};
+}
+var sessionMgr = new SessionManager();
+</script>
+
+<tpl id="unsupportHTML">
+	<div class="bu">
+		<div class="hdrp"><i class="pic logo"></i></div>
+		<div class="content">
+			<div class="t">
+				<p>当前使用的浏览器版本过低，无法正常使用infobox服务，推荐您下载安装以下浏览器中的任一款，然后再用新浏览器访问（www.CCTVxxx.com），给您带来不便，非常抱歉。</p>
+			</div>
+			<div class="label">
+				<ul>
+					<tpl id = 'bs'>
+						<li>
+							<a class ='i {icon}'></a>
+							<span>{name}</span>
+							<a class = 'href' target="_blank" href="{href}">{href}</a>
+						</li>
+					</tpl>
+				</ul>
+			</div>
+		</div>
+	</div>
+</tpl>
+<tpl id="page">
+	<nav class="navbar navbar-inverse navbar-fixed-top">
+		<div class="container-fluid">
+			<div class="navbar-header">
+				<a href="#"><span class="badges"></span>
+					<span class="navbar-brand">CCTV网管系统</span></a>
+			</div>
+			<ul class="nav navbar-nav main"><tpl id="nav"><li id="nav-{name}" class="{clz}">
+				<a data-href="{href}">
+					<span class="nav-{name}"></span><span>{text}</span>
+				</a>
+				<ul class="sub"><tpl id="subnav"><li id="nav-{name}" class="{clz}">
+					<a data-href="{href}">{text}</a>
+				</li></tpl></ul>
+			</li></tpl></ul>
+			<ul class="nav navbar-nav navbar-right">
+				<li class="profile"><span class="pic-avatar"></span>
+					<span class="name">{username}</span></li>
+				<li class="logout"><a data-href="$logout"><span class="sp"></span>
+					<span>退出</span></a></li>
+			</ul>
+		</div>
+	</nav>
+	<div class="bg"><div class="fix-bottom"></div></div>
+	<div id="topbar" class="hide"></div>
+	<div id="body"></div>
+	<div class="sidebar nv-box">
+		<div class="nv-title">实时告警</div>
+		<div class="nv-body"><ul id="rtFaults"><tpl id="days"><li id="day_{tick}">
+			<div class="title">{day}</div>
+			<tpl id="faults"><a data-href="{href}" class="{clz}">
+				<span class="color"></span><span class="text">{time}&nbsp;{site}的{deviceType}{msg}</span><span class="border-bottom"></span>
+			</a></tpl>
+		</li></tpl></ul></div>
+	</div>
+</tpl>
+<script>
+/**/
+function checkBrowserIfSupport(){
+	var mainVersion = IX.isOper || IX.isChrome || IX.isSafari || IX.isFirefox;
+	var ifSupported = document.location.href.indexOf("#unSupport") > -1 ? false : !(mainVersion && IX.isBelowMSIE9);	
+	var browsers = [
+		{
+		// 	name: "IE的Chrome插件",
+		// 	href: "http://www.google.com/chromeframe?hl=zh-CN&prefersystemlevel=true",
+		// 	icon: "ie"
+		// },{
+			name: "IE10",
+			href: "http://windows.microsoft.com/zh-cn/internet-explorer/ie-10-worldwide-languages",
+			icon: "ie"
+		},{
+			name: "IE11",
+			href: "http://windows.microsoft.com/zh-cn/internet-explorer/ie-11-worldwide-languages",
+			icon: "ie"
+		},{
+			name: "Firefox",
+			href: "http://firefox.com.cn/",
+			icon: "firefox"
+		},{
+			name: "Safari浏览器",
+			href: "http://www.apple.com.cn/safari/",
+			icon: "safari"
+		},{
+			name: "chrome浏览器",
+			href: "http://rj.baidu.com/soft/detail/14744.html",
+			icon: "chrome"
+		},{
+			name: "360极速浏览器",
+			href: "http://chrome.360.cn/",
+			icon: "chrome360"
+		}
+	];
+	if (!ifSupported){
+		document.body.className = "minor browser_unsupport";
+		document.body.innerHTML = t_unsupportHTML.renderData('', {
+			bs: browsers
+		});
+	}
+
+	return ifSupported;
+}
+
+/* faults : [{id, siteId, deviceType, deviceId, level, code, faultDate}] */
+var Seconds4Day = 24 * 3600;
+function getRTFaultTpldata(faults){
+	var daysHT = new IX.IListManager();
+	IX.iterate(IX.Array.sort(faults, function(a,b){return b.faultDate-a.faultDate;}), function(f){
+		var faultTick = f.faultDate;
+		var date = IX.IDate(faultTick);
+		var dateStr = date.toDate();
+		var dateTick = (new Date(date.toText().split(" ")[0])).getTime();
+
+		var info = daysHT.get(dateTick);
+		if (!info){
+			info = {
+				tick : dateTick,
+				day : dateStr + "&nbsp;" + date.toWeek(),
+				faults : []
+			};
+			daysHT.register(dateTick, info);
+		}
+		info.faults.push({
+			href : ixwPages.createPath("fault-item", {id:f.id}),
+			clz : "level" + f.level,
+			time : date.toTime(),
+			site : TCM.LineInfo.getSiteName(f.siteId),
+			deviceType : DeviceTypeNames[f.deviceType],
+			msg : FaultFormats[f.code] || FaultFormats["-1"]
+		});
+	});
+	return IX.Array.sort(daysHT.getAll(), function(a,b){return a.tick-b.tick;});
+}
+function insertHTML(el, html, type){
+	var _childEl = $XD.first(el, type);
+	if (!_childEl)
+		jQuery(el).append(html);
+	else
+		jQuery(html).insertBefore(_childEl);
+}
+function insertFaults(ulEl, dayFaults){
+	var dayEl = $X("day_" + dayFaults.tick);
+	if (dayEl)
+		insertHTML(dayEl, IX.map(dayFaults.faults, function(fault){
+			return t_page.renderData("days.faults", fault);
+		}).join(""), "a");
+	else
+		insertHTML(ulEl, t_page.renderData("days", dayFaults), "li");
+}
+var latestFaultId = null;
+function RTFaultWorker(){
+	function _refresh(faults){
+		var ulEl = $X('rtFaults');
+		if (!ulEl || !faults || faults.length===0) return;
+		IX.iterate(getRTFaultTpldata(faults), function(f){
+			insertFaults(ulEl, f);
+		});
+		if(faults && faults.length>0)
+			latestFaultId = faults[0].id;
+		var faultsArr = jQuery("#rtFaults").find("a");
+		if(faultsArr.length  > 500){
+			var Arr = faultsArr.slice(500, faultsArr.length);
+			var newArr = $XA(Arr);
+			newArr.reverse();
+			IX.iterate(newArr, function(fault, idx){
+				var parentNodeEl = jQuery(fault.parentNode);
+				if(parentNodeEl.find("a").length <= newArr.length-idx)
+					parentNodeEl.remove();
+				jQuery(fault).remove();
+			});
+		}
+	}
+
+	return new TNM.Util.PeriodicChecker(null, function(failFn){
+		if (!sessionMgr.hasAuth())
+			return;
+		TNM.Global.commonCaller("rtFaults", {id : latestFaultId}, _refresh, failFn);
+	});
+}
+
+var NavItems = [
+["sys", "线路管理", [
+	["sys-line", "线路信息"],
+	["sys-rack", "机柜管理"],
+	["sys-topo", "拓扑管理"]
+]],
+["device", "设备管理"],
+["fault", "故障管理"],
+["monitor", "监控信息", [
+	["monitor-perf", "性能监控"],
+	["monitor-stat", "统计分析"],
+	["monitor-logs", "操作日志"]
+]]
+];
+var DefaultNav = "sys-line";
+function NavManager(focusedNavName){
+	var focused = focusedNavName || DefaultNav;
+
+	function _getSubNavItemTplData(item){
+		var name = item[0];
+		return {
+			name : name,
+			text : item[1],
+			clz : "",
+			href: item[2] || ixwPages.createPath(name)
+		};
+	}
+	function _getNavItemTplData(name, item){
+		var subNavs = item.length>2 ? item[2] : [];
+		return {
+			name : name,
+			text : item[1],
+			clz : subNavs.length>0 ? "" : "nosub",
+			href: ixwPages.createPath(subNavs.length>0? subNavs[0][0]: name),
+			subnav : IX.map(subNavs, _getSubNavItemTplData)
+		};
+	}
+	function _focus(itemName, isFocused){
+		var arr = itemName.split("-");
+		var fn = isFocused ? $XH.addClass: $XH.removeClass;
+		if (arr.length==2) 
+			fn($X("nav-" + arr[0]), "active");
+		fn($X("nav-" + itemName), "active");
+	}
+	function focus(itemName){
+		var el = $X('nav-' + itemName);
+		if (itemName == focused || !el)
+			return;
+		_focus(focused, false);
+		focused = itemName;
+		_focus(itemName, true);
+	}
+	function _mouseoverOnLi(e){$XH.addClass(this, "hover");}
+	function _mouseoutOnLi(e){
+		var _this = this;
+		var pEl = $XH.ancestor(e.toElement, "ul");
+		pEl = pEl ? pEl.parentNode : null;
+		if (!$XH.hasClass(pEl, "hover"))
+			$XH.removeClass(_this, "hover");
+	}
+	return {
+		getRenderData : function(){ return IX.loop(NavItems, [], function loopNavItem(acc, item){
+			var name = item[0];
+			/*if (name == "home" || sessionMgr.checkIfModuleEnabled(name))*/
+				acc.push(_getNavItemTplData(name, item));
+			return acc;
+		});},
+		enableHover : 	function(){
+			jQuery(".main li").hover(_mouseoverOnLi, _mouseoutOnLi);
+		},
+		focus : focus
+	};
+}
+var navMgr = new NavManager();
+var rtfw = new RTFaultWorker();
+
+function clearSession(){
+	sessionMgr = new SessionManager();
+	TCM.LineInfo.destroy();
+	IXW.Pages.load("entry");
+	rtfw.stop();
+}
+function startSession(data){
+	TCM.LineInfo.init(data.lineInfo);
+	sessionMgr = new SessionManager(data);
+	latestFaultId=null;
+	rtfw = new RTFaultWorker();
+	document.body.innerHTML = t_page.renderData("",{
+		nav : navMgr.getRenderData(),
+		username : data.name
+	});
+	navMgr.enableHover();
+	rtfw.start();
+}
+
+var PagesConfiurations = IX.map([
+//{type?, name+, path?, bodyClz?, needAuth?},
+{type: "ErrPage", name: "401", needAuth : false},
+{type: "ErrPage", name: "404", needAuth : false},
+
+// {name: "sys", path : "sys/line", isDefault : true},
+{name: "sys-line", isDefault : true, bodyClz : "sys-line"},
+{name: "sys-rack", path:"sys/rack/{id}", bodyClz : "sys-rack"},
+{name: "sys-topo", bodyClz : "sys-topo"},
+
+{name: "device"},
+{name: "device-issue", path:"device/{id}", navItem :"device"},
+{name: "device-site", path:"device/site/{id}", navItem :"device"},
+
+{name: "fault"},
+{name: "fault-device", path:"fault/device/{id}/{siteId}", navItem :"fault"},
+{name: "fault-site", path:"fault/site/{id}", navItem :"fault"},
+{name: "fault-item", path:"fault/item/{id}", navItem :"fault"},
+{name: "fault-match", path:"fault/match", navItem :"fault"},
+
+{name: "monitor-perf"},
+{name: "monitor-stat"},
+{name: "monitor-logs"},
+
+{name: "entry", bodyClz: "entry", needAuth : false}
+], function(item){
+	var name = item.name;
+	var arr = name.split("-");
+	var moduleName = arr[0];
+	var className = item.type || moduleName.capitalize();
+	return IX.inherit({
+		initiator : "TNM." + className + ".init",
+		path : arr.join("/"),
+
+		nav : "service",
+		navItem : name,
+
+		needAuth : true
+	}, item);
+});
+
+ixwActions.configActions([["logout", function(){
+	function _okFn(){
+		TNM.Global.entryCaller("logout", {}, function(){	
+			clearSession();
+			latestFaultId = null;
+		});
+	}
+	NV.Dialog.confirm("提示", "确认是否退出?", _okFn);
+}]]);
+
+function loadSession(pageFn){
+	TNM.Global.commonCaller("session", {}, function(data){
+		if (!data || !data.id)
+			return ixwPages.load("entry");
+		startSession(data);
+		latestFaultId = null;
+		pageFn();
+	});
+}
+
+function checkSession(){
+	var timers = setInterval(function(){
+		var sessionKey = nvCache.getItem("tnmSessionKey");
+		if(sessionKey == sessionMgr.getSessionKey())
+			return;
+		if(sessionKey == "undefined-null"){
+			return NV.Dialog.confirm4login("提示", "当前用户已在其他窗口退出，请重新登录！", {
+					left : [],
+					right : [{name:"ok", text: "确定"}] 
+				}, function(){
+				loadSession(function(){
+					ixwPages.reload();
+				});
+			});
+		}
+		NV.Dialog.confirm4login("提示", "已存在登录用户，请刷新页面！", {
+				left : [],
+				right : [{name:"ok", text: "确定"}] 
+			}, function(){
+			loadSession(function(){
+				ixwPages.reload();
+			});
+		});
+	}, 3000);
+}
+
+IX.ns("TNM.Env");
+TNM.Env.init = function(){
+	ixwPages.listenOnClick(document.body);
+	ixwPages.configPages(PagesConfiurations, function(pageName, pageCfg){
+		return !$XP(pageCfg, "needAuth", true) || sessionMgr.hasAuth();
+	});
+	IXW.Navs.register("service", function(cfg){
+		navMgr.focus(cfg.navItem || "");
+	});
+	loadSession(function(){
+		ixwPages.start();
+	});
+	checkSession();
+};
+TNM.Env.reloadSession = function(){
+	loadSession(function(){
+		ixwPages.reload();
+	});
+};
+TNM.Env.clearSession = clearSession;
+TNM.Env.hasSession = function(){return sessionMgr.hasAuth();};
+TNM.Env.resetSession = function(data){startSession(data);};
+TNM.Env.getSession = function(){return sessionMgr;};
+TNM.Env.getLocalStroage = function(){return nvCache.getItem("tnmSessionKey");};
+TNM.Env.clearLocalStroage = function(){return nvCache.clear();};
+
+var appInitialized = false;
+TNM.init = function(){
+	if (appInitialized)
+		return;
+	appInitialized = true;
+	checkBrowserIfSupport();
+	TNM.Env.init();
+};
+</script>

@@ -1,0 +1,59 @@
+<script>
+var globalActionConfig = IXW.Actions.configActions;
+</script>
+<tpl id="combo">
+	<span class="dropdown">
+		<input type="hidden" id="{valueId}" value="{value}">
+		<button class="dropdown-toggle" type="button" id="{comboId}" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+			<span class="name" title="{valueText}">{valueText}</span><span class="pic-"></span>
+		</button>
+		<ul class="dropdown-menu" aria-labelledby="{comboId}"><tpl id="items"><li>
+			<a data-href="${action}" data-key="{id}" title="{name}">{name}</a>
+		</li></tpl></ul>
+	</span>
+</tpl>
+<tpl id="checkbox">
+	<input type="hidden" id="{valueId}" value="{value}">
+	<a class="nv-checkbox {clz}" data-href="${action}">
+		<span class="ixpic-"></span><span>{text}</span></a>
+</tpl>
+<script>
+globalActionConfig([["nvcombo.pick",function(params,el){
+	var id = params.key, name = el.innerHTML;
+	var dropdownEl = $XH.ancestor(el, "dropdown");
+	if (!dropdownEl) return;
+	var inputEl = $XD.first(dropdownEl, "input");
+	inputEl.value = id;
+	var nameEl = $XH.first($XH.first(dropdownEl, "dropdown-toggle"), "name");
+	nameEl.innerHTML = name;
+}	],["nvcheckbox.check",function(params,el){
+	var ifChecked = !$XH.hasClass(el, "selected");
+	$XH[ifChecked?"addClass":"removeClass"](el, "selected");
+	var inputEl = $XD.first(el.parentNode, "input");
+	inputEl.value = ifChecked;
+}]]);
+
+function getComboHTML(id, cfg){return t_combo.renderData("", IX.inherit({
+	valueId : id,
+	comboId : id + "_combo"
+},cfg)).replaceAll("{action}", "nvcombo.pick");}
+function getCheckBoxHTML(id, value, text, actionName){return t_checkbox.renderData("", {
+	valueId : id, 
+	value : value,
+	text: text,
+	clz : value ?"selected": ""
+}).replaceAll("{action}", actionName || "nvcheckbox.check");}
+
+IX.ns("NV.Lib");
+/**  (id, cfg : {
+	value :
+	valueText:
+	items :[{id, name[, action]}]
+	
+})
+ */ 
+NV.Lib.getComboHTML = getComboHTML;
+/**   (id, value, text[,actionName])
+ */ 
+NV.Lib.getCheckboxHTML = getCheckBoxHTML;
+</script>

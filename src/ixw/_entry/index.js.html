@@ -1,0 +1,86 @@
+<tpl id="login">
+	<div class="bg"><img src="{background}"></div>
+	<div class="container">
+		<div class="pic_top">
+			<div class="pic_squre"></div>
+			<div class="pic_char"></div>
+		</div>
+		<ul>
+			<li><span class="pic-user"></span><span class="verLine"></span><input type="text" id="account" tabindex="1" placeholder="账号"></li>
+			<li><span class="pic-pwd"></span><span class="verLine"></span><input type="password" id="password" tabindex="2" placeholder="密码"></li>
+		</ul>
+		<a id="submit" tabindex="3" class="btn longbtn" data-href="$login"><span>立即</span><span>登录</span></a>
+	</div>
+	<div class="footer" id="footer"><span class="footer-bar"></span></div>
+</tpl>
+<script>
+var ixwPages = IXW.Pages;
+var nvAlert = NV.Dialog.alert;
+IXW.Actions.configActions([["login", function(){
+	jQuery("#submit").attr("disabled",true);
+	jQuery("#account").attr("disabled",true);
+	jQuery("#password").attr("disabled",true);
+	TNM.Global.entryCaller("login", {
+		username : $X('account').value,
+		password : $X('password').value
+	}, function(data){
+		jQuery("#submit").attr("disabled",false);
+		jQuery("#account").attr("disabled",false);
+		jQuery("#password").attr("disabled",false);
+		TNM.Env.resetSession(data);
+		ixwPages.load("");
+	},function(data){
+		nvAlert(data.err);
+		jQuery("#submit").attr("disabled",false);
+		jQuery("#account").attr("disabled",false);
+		jQuery("#password").attr("disabled",false);
+	});
+}]]);
+
+var ImgWidth = 1939, ImgHeight = 1175, ContainerHeight = 300;
+function onresize(){
+	if (ixwPages.getCurrentName() != "entry")
+		return;
+
+	var winWidth = window.innerWidth;
+	var winHeight = window.innerHeight;
+	var w = document.body.clientWidth;
+	var r = Math.max(winWidth/ImgWidth, winHeight/ImgHeight);
+	var imgEl = jQuery(".bg img");
+	imgEl.css({
+		"width" : Math.round(ImgWidth * r) + "px",
+		"height" : Math.round(ImgHeight * r) + "px"
+	});
+	jQuery(".container").css("bottom", Math.max(0, Math.round((winHeight-ContainerHeight)/2))+"px");
+	//jQuery("#footer").css("background-position-x",Math.round((w-1940)/2)+"px");
+}
+$Xw.bind({"resize" :onresize}); 
+
+IX.ns("TNM.Entry");
+TNM.Entry.init = function(pageCfg, pageParams, cbFn){
+	if (TNM.Env.hasSession())
+		return ixwPages.load("");
+	document.body.innerHTML = t_login.renderData("",{
+		background:TNM.Global.backgroundUrl
+	});
+	onresize(); 
+	jQuery("input").bind({
+		"focus": function(e){
+			$XH.addClass($XD.ancestor(this, "li"), "focus");
+		},
+		"blur": function(e){
+			$XH.removeClass($XD.ancestor(this, "li"), "focus");
+		}
+	});
+	var aEl = $X("submit");
+	jQuery('#account').bind("keydown", function(e){
+		if ( e.which == 13)
+			$X('$password').focus();
+	});
+	jQuery(document).keydown(function(event){
+		if(event.keyCode == 13){
+			aEl.click();
+		}
+	});
+};
+</script>

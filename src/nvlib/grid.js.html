@@ -1,0 +1,115 @@
+<script>
+var globalActionConfig = IXW.Actions.configActions;
+var instHT = {};
+function getInst(el){
+	var  gridEl = $XH.ancestor(el, "ixw-grid");
+	if (!gridEl)return null;
+	return instHT[gridEl.id];
+}
+
+globalActionConfig([["ixw.grid.col", function(params, el){
+	var inst = getInst(el);
+	if (!inst) return;
+	inst.colAction(params.key, el);
+}], ["ixw.grid.cell", function(params, el){
+	var inst = getInst(el);
+	var ulEl = $XH.ancestor(el, "row");
+	if (!inst || !ulEl) return;
+	inst.cellAction($XD.dataAttr(ulEl, "id"), params.key, el);
+}], ["ixw.grid.action", function(params, el){
+	var inst = getInst(el);
+	var ulEl = $XH.ancestor(el, "row");
+	if (!inst || !ulEl) return;
+	inst.rowAction($XD.dataAttr(ulEl, "id"), params.key, ulEl);
+}]]);
+
+</script>
+<tpl id="grid">
+	<div id="{id}" class="ixw-grid {clz}">
+		<ul class="hdr"><tpl id="header">
+			<li class="col-{name}">
+				<a data-href="$ixw.grid.col" data-key="{name}">
+					<span>{html}</span>
+					<span class="pic- hide"></span>
+				</a>
+			</li>
+		</tpl>
+		</ul>
+		<div class="body"><tpl id="rows">
+			<ul data-id="{id}" class="row {clz}"><tpl id="cells">
+				<li class="col-{name}">
+					<a class="cell {longClz}" data-href="$ixw.grid.cell" data-key="{name}" title = "{title}">{html}</a>
+				</li>
+			</tpl>
+				<li class="r col-actions invisible">
+					<div class="btns-group {moreClz}">
+						<a class="act-more dropdown-toggle" data-toggle="dropdown" title="更多操作"></a>
+						<ul class="dropdown-menu"><tpl id = "dropdowcActs">
+							<li><a data-href="$nvgrid.clickTool" data-key="{name}">{html}</a></li>
+							</tpl>
+						</ul>
+					</div><tpl id="actions">
+					<a class="act-{name}" data-href="$ixw.grid.action" data-key="{name}" title="{title}">{html}</a>
+				</tpl></li>
+			</ul>
+		</tpl></div>
+	</div>
+</tpl>
+<script>
+
+IX.ns("IXW.Lib");
+/** cfg : {
+	container : //required if use show function
+	id,		// optional
+
+	rowModel : function(rowData, colModels)// default is RowModelBase
+
+	columns : [name],
+	actions  : [[name, function(rowModel, rowEl){}], ...
+	dataLoader :function(params, cbFn)
+	}
+ */
+IXW.Lib.Grid = function(cfg){
+	var container = $XP(cfg,  "container");
+	var id = cfg.id || IX.id();
+	var actionHT = IX.loop($XP(cfg, "actions", []), {}, function(acc, act){
+		acc[act[0]] = act[2];
+		return acc;
+	});
+	var model = new IXW.Lib.GridModel(id, cfg);
+
+	function _show(){
+		var el = $X(container);
+		if(!el) return;
+		el.innerHTML = t_grid.renderData("", model.getTpldata());
+	}
+	function _refresh(onlyData){
+		var bodyEl = $XH.first($X(id), "body");
+		if (!bodyEl || onlyData) return;
+		var tpldata = model.getTpldata();
+		bodyEl.innerHTML = IX.map(tpldata.rows, function(rowData){
+			return t_grid.renderData("rows", rowData);
+		}).join("");
+	}
+	var self = {
+		getHTML : function(){
+			return t_grid.renderData("", model.getTpldata());
+		},
+		getId : function(){return id;},
+		getModel : function(){return model;},
+		show :function(){model.load(0, _show);},
+		refresh : function(onlyData){_refresh(onlyData);},
+		colAction : function(name, colEl){
+			// to be overrided;
+		},
+		cellAction : function(rowId, name, cellEl){
+			// to be overrided;
+		},
+		rowAction : function(rowId, actionName, rowEl){
+			actionHT[actionName](model.getRow(rowId), rowEl);
+		}
+	};
+	instHT[id] = self;
+	return self;
+};
+</script>

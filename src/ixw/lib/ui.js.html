@@ -1,0 +1,91 @@
+<script>
+var scaleTransform = IX.CSSVendorName + 'transform:scale({rate});';
+/**
+	cfg : {
+		which : "width" /"height"
+		fixed : 280
+		max : 1380,  ---> rate = 1 
+		min: 720,    ---> rate = 0.4
+
+	}
+ */
+TNM.Lib.onresize = function(el, cfg, moreFn){
+	var attrName = $XP(cfg, "which", "width")=="width" ? "clientWidth" : "clientHeight";
+	var maxAttr = $XP(cfg, "max"), minAttr = $XP(cfg, "min");
+	var fixed = $XP(cfg, "fixed"), origin = Math.max(1, maxAttr - fixed);
+	function onResize(){
+		var  _el = $X(el);
+		if (!el) return;
+
+		var attrValue = document.documentElement[attrName];
+		var rate = (attrValue > maxAttr) ? 1: ((Math.max(minAttr, attrValue) - fixed) / origin);
+		
+		_el.style.cssText = scaleTransform.replaceByParams({rate: rate});
+		if (IX.isFn()) moreFn();
+	}
+	onResize();
+	$Xw.bind({"resize" : onResize});
+};
+TNM.Lib.verticalText = function(data){
+	var reg = /([A-Z]|[0-9])+/g;
+	return IX.loop(data, [], function(acc, item, idx){
+		var result;
+		var arrEn = [];
+		var isStart = null;
+		var top = 0;
+		var index = "index";
+		while(result = reg.exec(item.name)){
+			if(result[index] === 0)
+				isStart = true;
+			var len = result[0].length == 1 ? 16 : result[0].length * 8;
+			top += len;
+			arrEn.push('<div class="vertical" style="width:'+len+'px; height:'+len+'px">' + result[0] + '</div>');
+		}
+		var arr = item.name.replace(reg, ",").split(",");
+		var arrCh = [];
+		for (var i = 0; i < arr.length; i++) {
+			if(arr[i]){
+				top += arr[i].length * 16;
+				arrCh.push('<div style="height:'+ arr[i].length * 16 +'px">' + arr[i] + '</div>');
+			}
+		}
+		if(arrEn.length !== 0){
+			var newArr = [];
+			if(isStart){
+				for (var j = 0; j < arrEn.length; j++) {
+					newArr.push(arrEn[j]);
+					newArr.push(arrCh[j]);
+				}
+			}else{
+				for (var k = 0; k < arrCh.length; k++) {
+					newArr.push(arrCh[k]);
+					newArr.push(arrEn[k]);
+				}
+			}
+			acc.push(IX.inherit(item, {
+				name: '<div class="ver-text" style="height:'+ top +'px">'+newArr.join("")+'</div>'
+			}));
+		}else{
+			acc.push(IX.inherit(item, {
+				name: '<div class="ver-text" style="height:'+ item.name.length * 16 +'px">' + item.name + '</div>'
+			}));
+		}
+		return acc;
+	});
+};
+
+TNM.Lib.resizeTreeAndGrid = function(treeEl){
+	var clientHeight = jQuery(".sidebar").height();
+	if(clientHeight > 880){
+		jQuery(".nvgrid-body").css("min-height",clientHeight-110 + "px");
+		var gridHeight1 = jQuery("#Grid").height();
+		treeEl.style.height = gridHeight1 + "px";
+		jQuery(".nv-tree").css("height",gridHeight1-60 + "px");
+	}else{
+		jQuery(".nvgrid-body").css("min-height","786px");
+		var gridHeight = jQuery(".nv-grid").height();
+		treeEl.style.height = gridHeight + "px";
+		jQuery(".nv-tree").css("height", gridHeight-60+"px");
+	}
+};
+</script>

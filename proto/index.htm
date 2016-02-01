@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+	<head>
+		<meta charset="utf-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<title>CCTV网管系统</title>
+		<link rel="shortcut icon" type="image/x-icon" href="../src/images/favicon.png" media="screen" />
+		<link href="../src/less/core.less" rel="stylesheet/less" type="text/css"/>
+<script type="text/javascript">
+//var TNM_BaseUrl = "http://192.168.21.108/tnm";
+var TNM_BaseUrl = "http://localhost/tnm";
+if ("TNMBaseUrl" in parent)
+	TNM_BaseUrl = parent.TNMBaseUrl;
+</script>
+		<!--  Less Compiler -->
+		<script>
+window.ETS_NS = "TNM.Tpl";
+less = {
+	env: "development",
+	async: false,
+	fileAsync: false,
+	poll: 1000,
+	functions: {},
+	dumpLineNumbers: "comments",
+	relativeUrls: false
+};
+		</script>
+		<script src="../src/lib/less.min.js"></script>
+	<!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+	<!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+	<!--[if lt IE 9]>
+		<script src="http://cdn.bootcss.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+		<script src="http://cdn.bootcss.com/respond.js/1.4.2/respond.min.js"></script>
+	<![endif]-->
+	</head>
+	<body>
+	</body>
+	<!-- Basic JS lib required for ets and common facilities -->
+	<script src="../src/lib/ix.js"></script>
+	<!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+	<script src="../src/lib/jquery-2.1.1.js"></script>
+	<!-- Include all compiled plugins (below), or include individual files as needed -->
+	<script src="../src/bootstrap/js/bootstrap.js"></script>
+
+	<script src="../src/lib/ixw.js"></script>
+	<script src="../src/lib/ixwui.js"></script>
+
+	<!-- gloabl data here! -->
+	<script src="global.js"></script>
+	<!-- global data above! -->
+
+	<!-- user-defined JS lib here! -->
+	<script src="../src/ixw/lib/const.js"></script>
+	<script src="../src/ixw/lib/tnmconst.js"></script>
+	<script src="../src/ixw/lib/shareData.js"></script>
+	<script src="../src/ixw/lib/util.js"></script>
+	<script src="../src/ixw/lib/jquery-migrate-1.2.1.js"></script>
+	<script src="../src/ixw/lib/jquery.jqprint-0.3.js"></script>
+	<script src="../src/nvlib/model.js"></script>
+	<script src="../src/ixw/grid/cols.js"></script>
+
+	<link type="ets" href="../src/nvlib/ui.js.html"></link>
+	<link type="ets" href="../src/nvlib/grid.js.html"></link>
+	<link type="ets" href="../src/nvlib/nvgrid.js.html"></link>
+	<link type="ets" href="../src/ixw/lib/tree.js.html"></link>
+	<link type="ets" href="../src/nvlib/dialog.js.html"></link>
+	<link type="ets" href="../src/ixw/lib/dashboard.js.html"></link>
+	<link type="ets" href="../src/ixw/lib/sites.js.html"></link>
+	<link type="ets" href="../src/ixw/lib/racks.js.html"></link>
+	<link type="ets" href="../src/ixw/lib/topo.js.html"></link>
+	<link type="ets" href="../src/ixw/lib/ui.js.html"></link>
+	<link type="ets" href="../src/ixw/grid/grid.js.html"></link>
+	
+	<link type="ets" href="../src/ixw/_entry/index.js.html"></link>
+	<link type="ets" href="../src/ixw/_err/index.js.html"></link>
+	<link type="ets" href="../src/ixw/_sys/index.js.html"></link>
+	<link type="ets" href="../src/ixw/_device/index.js.html"></link>
+	<link type="ets" href="../src/ixw/_device/dialog.js.html"></link>
+	<link type="ets" href="../src/ixw/_fault/index.js.html"></link>
+	<link type="ets" href="../src/ixw/_monitor/index.js.html"></link>
+
+	<link type="ets" href="../src/ixw/index.js.html"></link>
+
+	<!-- user-defined JS lib above! -->
+	<!-- JS Tpl mix parser -->
+	<script src="../src/lib/ets.js"></script>
+	<script src="../sim/simDevices.js"></script>
+	<script src="../sim/sim.js"></script>
+	<script src="../sim/simRack.js"></script>
+<script type="text/javascript">
+IXW.ready("TNM.init", function(fn){
+	if (!IX.isFn(fn))
+		alert("Can't initialize page for not found init function : " + fn);
+	else 
+		fn();
+});
+</script>
+</html>

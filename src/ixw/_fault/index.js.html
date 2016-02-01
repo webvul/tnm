@@ -1,0 +1,328 @@
+<script>
+var deviceCaller = TNM.Global.deviceCaller;
+var globalActionConfig = IXW.Actions.configActions;
+var deviceNames = TCM.Const.DeviceTypeNames;
+var CurrentSite = null;
+/*构造tree基础节点*/
+function getLeafInfo(arr){
+	return IX.map(arr, function(item, idx){
+		return {name: deviceNames[item], key: [item]};
+	});
+}
+var TreeInfo = [
+{name : "",  nodes : [
+	{name : '服务器', nodes : getLeafInfo([1, 2, 3])},
+	getLeafInfo([10])[0],
+	{name : '数字摄像机', nodes : getLeafInfo([20, 21, 22])},
+	{name : '模拟摄像机', nodes : getLeafInfo([31, 32, 33])},
+	{name : '拾音器', nodes : getLeafInfo([40, 41])},
+	getLeafInfo([50])[0],
+	getLeafInfo([51])[0],
+	getLeafInfo([52])[0],
+	getLeafInfo([53])[0],
+	getLeafInfo([54])[0],
+	getLeafInfo([65])[0],
+	{name : '网络和附属设备', nodes : getLeafInfo([60, 61, 62, 63, 64, 90])}
+]}];
+var CurrentOne = {name: "", nodes: [
+	{name : '服务器', nodes : getLeafInfo([0, 1, 2, 3])},
+	getLeafInfo([10])[0],
+	getLeafInfo([51])[0],
+	getLeafInfo([53])[0],
+	getLeafInfo([54])[0],
+	{name : '网络和附属设备', nodes : getLeafInfo([60, 61, 62, 63, 64, 90])}
+]};
+//grid的显示列表
+var faultGridCfgs = {columns: "fauSiteId,fauDeviceName,fauFaultDate,fauLevel,fauDeviceIp,fauIsHandled,fauCode,details,fauDesc"};
+</script>
+<tpl id="input"><div><input class="search" placeholder="设备选择"><a class="pic-search"></a></div></tpl>
+<tpl id="info">
+	<div id="Tree"><div id="treeName">{treeName}</div>{treeData}</div>
+	<div id="Grid" class="{clz}  nv-box"></div>
+</tpl>
+
+<script>
+globalActionConfig([["ixw.grid.cell", function(params, el){
+	var id = params.key;
+	var parentEl = jQuery(el.parentNode.parentNode);
+	var handleEl = jQuery(el).find("span");
+	if(id == "details"){
+		parentEl.siblings().removeClass("expand");
+		parentEl.toggleClass("expand");
+		var length=jQuery(el.parentNode.nextElementSibling).find("div").length;
+		if(length>0)
+		{
+			jQuery(".body ul").css("height","35px");
+			jQuery(".body .expand").css("height",(length+1)*35+"px");
+			jQuery(".body .expand .col-desc").css("height",length*35+1+"px");
+		}
+	}
+	if(id == "isHandled" && $XH.hasClass(handleEl.get(0), "notHandle")){
+		var faultId = $XD.dataAttr(parentEl.get(0), "id");
+		var siteId=jQuery(".nv-tree").find("a.select").attr("data-siteid");
+		deviceCaller("handleFault", {id: faultId,siteId:siteId}, function(data){
+			handleEl.removeClass("notHandle").addClass("handle");
+			handleEl[0].innerHTML="已处理";
+			var faultPath="fault/item/"+faultId;
+			var itemLength=jQuery("a[data-href='"+faultPath+"']").parent().children().length;
+			if(itemLength>2){
+				jQuery("a[data-href='"+faultPath+"']").remove();
+			}else{
+				jQuery("a[data-href='"+faultPath+"']").parent().remove();
+			}
+		});
+	}
+}]]);
+//Tree的点击函数
+function devicTreeClick(params){
+	var types = IX.map(params.keys.split(","),function(type){return Number(type);});	
+	createFaultGrid(faultGridCfgs, {
+		types: types, 
+		siteId: params.siteId - 0, 
+		name: params.name + "列表", 
+		el: params.el,
+		level: "all",
+		isHandled:"all",
+		from: TNM.Lib.GetCurDay(),
+		to: Math.floor(new Date().getTime()/1000)
+	});	
+}
+//获取表格的工具栏
+function getFilterTool(date, num2, num1){
+	var baseCfg = {
+		hasDate: true,
+		defaultDate: "",
+		dataText: "告警时间",
+		toolList: [{
+			id: "level",
+			text: "告警级别"
+		},{
+			id: "isHandled",
+			text: "处理状态"
+		}]
+	};
+	return new TNM.Lib.BaseFilterTools(IX.inherit(baseCfg, {defaultDate: date}, {
+		toolList: IX.map(baseCfg.toolList, function(list, idx){
+			if (idx === 0 && num1)
+				return IX.inherit(list, {num: num1});
+			else if (idx === 1 && num2) 
+				return IX.inherit(list, {num: num2});
+			else 
+				return list;
+		})
+	}));
+}
+//创建显示表格
+function createFaultGrid(cfgs, treeCfg){
+	var grid = null;
+	var columns = $XP(cfgs, "columns").split(",");
+	var types = treeCfg.types;
+	var fromSite=treeCfg.fromSite;
+	var fromItem=treeCfg.fromItem;
+	var siteId = treeCfg.siteId;
+	var fromDevice=treeCfg.fromDevice;
+	var deviceId=fromDevice?treeCfg.deviceId:"";
+	var currentFilter;
+	if(fromSite||fromDevice)
+		currentFilter = getFilterTool("", 2);
+	else if(fromItem)
+		currentFilter = getFilterTool(treeCfg.faultDate, 2, treeCfg.level);
+	else
+		currentFilter = getFilterTool("default");
+	grid = new TNM.Lib.FilterGrid({
+			container: $XP(cfgs, "container", 'Grid'),
+			title : "故障管理",
+			clz : "device-list-"+treeCfg.types[0],
+			columns: columns,
+			actions : [],
+			tools: currentFilter,
+			usePagination : $XP(cfgs, "usePagination") || true,
+			baseParams: treeCfg,
+			dataLoader : function(params, _cbFn){
+				deviceCaller(fromDevice?"getFault4Device":(fromItem?"getFaultById":"getFault4type"), params, function(data){
+					_cbFn(data);
+					fromItem=false;
+					fromSite=false;
+					fromDevice=false;
+					if ($X("Tree"))
+						TNM.Lib.resizeTreeAndGrid($X("Tree"));
+				});
+			}
+	});
+	return grid;
+}
+//构造树形结构
+function parseTree(treeInfo, countHT, siteId) {
+	function getTreeNode(_treeNodes){
+		return IX.map(_treeNodes,function(treeNode){
+			return IX.inherit(treeNode, getAttr(treeNode));
+		});
+	}
+	function getAttr(treeNode){
+		if(treeNode.key)
+			return {
+				key : treeNode.key,
+				count : countHT[treeNode.key[0]] ? countHT[treeNode.key[0]] : 0,
+				siteId : siteId,
+				nodes : []
+			};
+		var arr = [], count = 0;
+		var nodes = treeNode.nodes === 0 ? [] : getTreeNode(treeNode.nodes);
+		for (var i = 0; i < nodes.length; i++) {
+			arr = arr.concat(nodes[i].key);
+			count += nodes[i].count;
+		}
+		return {
+			key : arr,
+			count : count,
+			siteId : siteId,
+			nodes : nodes
+		};
+	}
+	return getTreeNode(treeInfo).pop();
+}
+//获取设备列表
+function getDevices(cbFn){
+	deviceCaller("getAllDevices", {}, function(data){
+		var arrCount = IX.map(data, function(site, idx){
+			var countHT = {};
+			IX.iterate(site.devices, function(device){
+				countHT[device.type] = device.count;
+			});
+			var lineSite = TCM.LineInfo.getSites().get(site.siteId);
+			var arr = [];
+			if(lineSite.type == 1){
+				arr = [IX.inherit(CurrentOne, {name: lineSite.name})];
+			}else{
+				TreeInfo[0].name = lineSite.name;
+				arr = TreeInfo;
+			}
+			return parseTree(arr, countHT, site.siteId);
+		});
+		cbFn({nodes : arrCount});
+	});
+	
+}
+//初始化Tree的节点显示
+function showTreeNode(){
+	jQuery(".nv-tree>ul>li>ul>li").children("ul").hide();
+	jQuery(".nv-tree>ul>li").children('ul').hide();
+}
+//展示fault页面，入口函数
+function showFaultList(params,cbFn){
+	getDevices(function(_cfg){
+		var cfg = IX.inherit(_cfg, {
+			htmlFn : function(node) {return node.name ;},
+			click : devicTreeClick
+		});
+		var tree = new TCM.Lib.Tree(cfg);
+		$X('body').innerHTML = t_info.renderData("", {
+			treeName : "线路设备列表",
+			treeData : tree.getHTML(),
+			clz : "fault"
+		});
+		showTreeNode();
+		var types;
+		var siteId;
+		var keys;
+		if(params.fromDevice){
+			var deviceId;
+			IX.loop(params.items, [], function(acc, item){
+				deviceId=item.deviceId;
+				siteId=item.siteId;
+			});
+			keys=jQuery(".nv-tree>ul>li>a[data-siteid='"+siteId+"']").attr("data-key");
+		    types=IX.map(keys.split(","),function(type){return Number(type);});
+			createFaultGrid(faultGridCfgs, {
+				types: types, 
+				siteId:siteId , 
+				name: "", 
+				el: "",
+				level: "all",
+				isHandled: false,
+				fromDevice:true,
+				deviceId:deviceId
+			});
+			jQuery(".nv-tree>ul>li>a[data-siteid='"+siteId+"']").addClass("select");
+		}else if(params.fromItem){
+			var id;
+			var level;
+			var faultDate;
+			IX.loop(params.items, [], function(acc, item){
+				id=item.id;
+				siteId=item.siteId;
+				level=item.level;
+				faultDate=item.faultDate;
+			});
+			keys=jQuery(".nv-tree>ul>li>a[data-siteid='"+siteId+"']").attr("data-key");
+		    types=IX.map(keys.split(","),function(type){return Number(type);});
+			createFaultGrid(faultGridCfgs, {
+				types: types, 
+				siteId:siteId, 
+				name: "", 
+				el: "",
+				level: level,
+				isHandled: false,
+				from: TNM.Lib.GetCurDay(),
+				to: Math.floor(new Date().getTime()/1000),
+				fromItem:true,
+				id:id,
+				faultDate:faultDate
+			});
+			jQuery(".nv-tree>ul>li>a[data-siteid='"+siteId+"']").addClass("select");
+		}
+		else if(params._name=="fault-site"){
+			keys=jQuery(".nv-tree>ul>li>a[data-siteid='"+params.id+"']").attr("data-key");
+			types=IX.map(keys.split(","),function(type){return Number(type);});
+			jQuery(".nv-tree>ul>li>a[data-siteid='"+params.id+"']").addClass("select");
+			createFaultGrid(faultGridCfgs, {
+				types: types, 
+				siteId:params.id - 0, 
+				name: "", 
+				el: "",
+				level: "all",
+				isHandled:false,
+				from: null,
+				to: null,
+				fromSite:true,
+			});
+		}else{
+			jQuery(".nv-tree>ul>li:first a:first span:last").click();
+		}
+	});
+	cbFn();
+}
+IX.ns("TNM.Fault");
+TNM.Fault.init = function(pageCfg, pageParams, cbFn){
+	CurrentSite = TNM.Env.getSession().getLineInfo();
+	switch(pageCfg.name){
+	case "fault":
+		if(pageParams.flag)
+			return;
+		showFaultList(pageParams,cbFn);
+		break;
+	case "fault-site":
+		showFaultList(pageParams, cbFn);
+		break;
+	case "fault-item":
+		deviceCaller("getFaultById", IX.inherit(pageParams, {
+			id: pageParams.id - 0
+		}), function(data){
+			data.fromItem=true;
+			showFaultList(data,cbFn);			
+		});
+		break;
+	case "fault-device":
+		pageParams.deviceId=pageParams.id - 0;
+		pageParams.pageNo=0;
+		pageParams.pageSize=20;
+		deviceCaller("getFault4Device", IX.inherit(pageParams, {
+			id: pageParams.id - 0
+		}), function(data){
+			data.fromDevice=true;
+			showFaultList(data,cbFn);			
+		});
+		break;
+	}
+};
+</script>

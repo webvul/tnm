@@ -1,0 +1,10 @@
+.eunit
+deps
+*.o
+*.beam
+*.plt
+.DS_Store
+.settings
+.project
+web.config
+node_modules

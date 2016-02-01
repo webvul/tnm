@@ -1,0 +1,642 @@
+<script>
+var globalActionConfig = IXW.Actions.configActions;
+var ixwGrid = IXW.Lib.Grid;
+var getComboHTML = NV.Lib.getComboHTML;
+var deviceType = TCM.Const.DeviceTypeNames;
+</script>
+<tpl id="pagin">
+	<div id="{id}-indics" class="l"><tpl id="indics">
+		从<span>{stx}</span>到<span>{endx}</span>/共<span>{pagex}</span>条数据
+	</tpl></div>
+	<div class="m">{paginHTML}</div>
+	<div class="r">
+		<span>显示</span><div class="page">
+		<div class="dropdown">
+			<a class="changePage dropdown-toggle" data-toggle="dropdown">
+				<span id="curPage" class="pagesize">{pageInfo}</span><span class="pgFrame"><span class="pic-pg"></span></span>
+			</a>
+			<ul class="dropdown-menu"><tpl id="list"><li class="{clz}" id="{id}">
+				<a class="pagesize" data-href="$nvpagin.change" data-key="{value}" data-target="{id}">{html}</a>
+			</li></tpl></ul>
+		</div></div>
+	</div>
+</tpl>
+<script>
+var PagesizeList = [
+{id : "page-0",value : 20, text : "每页20条"},
+{id : "page-1",value : 50, text : "每页50条"},
+{id : "page-2",value : 100, text : "每页100条"}
+];
+var currentPageSize = PagesizeList[0];
+
+function getPaginTpldata(id){ return {
+	id : id,
+	indics: [{stx : 0,endx : 0, pagex : 0}],
+	paginHTML : "",
+	pageInfo : currentPageSize.text,
+	list : IX.map(PagesizeList,function(item){return {
+		value : item.id,
+		clz : item.id == currentPageSize.id ? "disabled" : "",
+		html : item.text
+	};})
+};}
+
+var paginListeners = {};
+globalActionConfig([["nvpagin.change",function(params,el){
+	var liEl = el.parentNode;
+	if ($XH.hasClass(liEl, "disabled"))
+		return;
+	var _el = $XH.ancestor(liEl, "dropdown");
+	var curpsEl = $XH.first($XD.first(_el, "a"), "pagesize");
+	curpsEl.innerHTML = el.text;
+
+	$XH.removeClass($XH.first(liEl.parentNode,  "disabled"), "disabled");
+	$XH.addClass(liEl, "disabled");
+
+	currentPageSize = PagesizeList[params.key.split("-").pop()];
+	var fn = paginListeners[$XD.dataAttr(el, "target")];
+	if (IX.isFn(fn))
+		fn(currentPageSize.value);
+}]]);
+
+function NVPagination(id){
+	var inst = new IXW.Lib.Pagination({
+		id : id + "-pagin",
+		total : 0,
+		current : 0
+	});
+	var tpldata = getPaginTpldata(id);
+	tpldata.paginHTML = inst.getHTML();
+
+	return {
+		getHTML : function(){return t_pagin.renderData("", tpldata);},
+		getCurrentPageNo : function(){return inst.getCurrentPageNo();},
+		bind : function(pageNoChangedFn, pageSizeChangeFn){
+			inst.bind(pageNoChangedFn);
+			paginListeners[id] = function(pageSize){
+				// pageSizeChangeFn(inst.getCurrentPageNo(), pageSize);
+				pageSizeChangeFn(0, pageSize);
+			};
+		},
+		jump : inst.jump,
+		refresh : function(totalPages, currentPageNo, itemNum, onlyData){
+			inst.apply(currentPageNo, totalPages, onlyData);
+			tpldata.paginHTML = inst.getHTML();
+			var stx = currentPageNo * currentPageSize.value;
+			tpldata.indics = [{stx : stx, endx : stx + itemNum, pagex : itemNum}];
+			var el = $X(id + "-indics");
+			if (!onlyData && el)
+				 el.innerHTML = t_pagin.renderData("indics", tpldata.indics[0]);
+		}
+	};
+}
+
+</script>
+<tpl id="tools">
+	<div id="{id}_tool"><tpl id="btns">
+		<a class="btn-{name} {clz}" data-href="$nvtool.click" data-target="{id}" data-key="{name}"></a>
+	</tpl></div>
+</tpl>
+<script>
+var toolListens = {};
+globalActionConfig([["nvtool.click", function(params, el){
+	if ($XH.hasClass(el, "disabled")) return;
+	var fn = toolListens[$XD.dataAttr(el, "target")];
+	if (IX.isFn(fn))
+		fn(params.key);
+}]]);
+
+/** cfg :{
+	buttons : [{name:, chkEnabled :}]
+	actions : {
+		name : function(){}
+	}	
+   }
+ */
+function NVTools(id, cfg){
+	var tpldata = {
+		id : id,
+		btns : IX.map($XP(cfg, "buttons", []), function(btn){ return {
+			name : btn.name,
+			clz : $XP(btn, "chkEnabled", true)? "chkEnable disabled" : ""
+		};})
+	};
+	toolListens[id] = function(name){$XF(cfg, "actions." + name)();};
+	function _enable(isEnabled){
+		var el = jQuery("#" + id + "_tool .chkEnable");
+		el[isEnabled?"removeClass":"addClass"]("disabled");
+	}
+	return {
+		getHTML : function(){return t_tools.renderData("", tpldata);},
+		enable : function() {_enable(true);},
+		disable : function(){_enable(false);}
+	};
+}
+
+</script>
+<tpl id="grid">
+<div id="{id}" class="nv-grid nv-box {gridClz}">
+	<div class="nvgrid-title nv-title">{title}</div>
+	<div class="nvgrid-tools">{toolHTML}</div>
+	<div class="nvgrid-body">{gridHTML}</div>
+	<div class="nvgrid-foot">{paginHTML}</div>
+</div>
+</tpl>
+<script>
+/** cfg : {
+	container : //required
+	id, // optional
+
+	clz : gridClz,
+	title : "XXX"
+	
+	usePagination : false; default true;
+	
+	rowModel : function(rowData, colModels), //optional
+	columns : [name],
+	actions : [[name, function(rowModel, rowEl)]]
+	dataLoader : function(params, cbFn)
+	clickOnRow : function(rowId)
+
+	tools : {
+		buttons : [{name, chkEnabled}]
+		actions : {
+			name : function(){}
+		}	
+	}
+}
+ */
+IX.ns("NV.Lib");
+NV.Lib.Grid = function(cfg){
+	var container = $XP(cfg,  "container");
+	var id = cfg.id || IX.id();
+
+	var toolCfg = $XP(cfg, "tools");
+	var usePagination = $XP(cfg, "usePagination", true);
+	var clickOnRow = $XF(cfg, "clickOnRow");
+
+	var grid = new IXW.Lib.Grid(IX.inherit(cfg, {
+		id : id + "-grid",
+		pageSize : currentPageSize.value,
+		dataLoader : $XF(cfg, "dataLoader")
+	}));
+	var model = grid.getModel();
+
+	function applyHover(){
+		jQuery($X(container)).find(".row").hover(
+			function(){$XH.addClass(this, "hover");},
+			function(){$XH.removeClass(this, "hover");}
+		);
+	}
+	function _getSelectedCells(){
+		return jQuery("#" + id + "-grid").find(".row .selected");
+	}
+	
+	var pagin =	null, tools = null, onselectRow = IX.emptyFn;
+	function afterLoaded(pageNo, items, onlyData){
+		grid.refresh(onlyData);
+		if (!onlyData)
+			applyHover();
+		if(pagin)
+			pagin.refresh(model.getPageCount(), pageNo, items.length, onlyData);
+		if (tools)
+			tools.disable();
+	}
+	function loadPage(pageNo){
+		model.load(pageNo, function(items){afterLoaded(pageNo, items);});
+	}
+	if (toolCfg) {
+		tools = new NVTools(id, toolCfg);
+		onselectRow = function(){
+			var selectedCells = _getSelectedCells();
+			tools[selectedCells.length>0?"enable":"disable"]();
+		};
+	}
+
+	grid.colAction = function(name, colEl){
+		if (name == "_check"){
+			var el = jQuery(colEl);
+			var ifAllSelected = el.find(".checkbox").hasClass("selected");
+			var checkboxEls = el.parents(".ixw-grid").find(".col-_check .checkbox");
+			checkboxEls[ifAllSelected?"removeClass":"addClass"]("selected");
+			onselectRow();
+		}
+	};
+	grid.cellAction = function(rowId, cellName, cellEl){
+		if (cellName == "_check"){
+			$XH.toggleClass($XH.first(cellEl, "checkbox"), "selected");
+			var isChoseAll = true;
+			jQuery(".ixw-grid .body").find(".checkbox").each(function(){
+				if (!$XH.hasClass(this, "selected")) isChoseAll = false;
+			});
+			var choseAllEl = jQuery(".ixw-grid").find(".hdr .checkbox")[0];
+			if (isChoseAll){
+				$XH.addClass(choseAllEl,"selected");
+			}else{
+				$XH.removeClass(choseAllEl,"selected");
+			}
+			onselectRow();
+		} else {
+			clickOnRow(rowId, cellName, cellEl);
+		}
+	};
+
+	if (usePagination){
+		pagin = new NVPagination(id);
+		pagin.bind(loadPage, function(pageNo, pageSize){
+			model.resetPage(pageNo, pageSize, function(items){
+				afterLoaded(pageNo, items);
+			});
+		});
+	}
+
+	function _show(items){
+		var el = $X(container);
+		if (!el)
+			return;
+		afterLoaded(0, items, true);
+		el.innerHTML = t_grid.renderData("", {
+			id : id, 
+			gridClz : $XP(cfg, "clz", ""),
+			title : $XP(cfg, "title",  ""),
+			toolHTML : tools ? tools.getHTML() :"",
+			gridHTML : grid.getHTML(),
+			paginHTML : pagin?pagin.getHTML() : ""
+		});
+		applyHover();
+	}
+	function _refresh(pageNo){
+		if (pagin) pagin.jump(pageNo);
+		else loadPage(0);
+	}
+	return {
+		getModel : function(){return model;},
+		getSelectedRows : 	function(){
+			return IX.map(_getSelectedCells(), function(el){
+				var _el = $XH.ancestor(el, "row");
+				return model.getRow($XD.dataAttr(_el, "id"));
+			});
+		},
+		addItems : function(ids){
+			model.addItems(ids);
+			_refresh(model.getPageCount()-1);
+		},
+		removeItems : function(ids){
+			model.removeItems(ids);
+			_refresh(Math.min(pagin ? pagin.getCurrentPageNo(): 0, model.getPageCount()-1));
+		},
+		show: function(){model.load(0, _show);},
+		refresh : function(pageNo){_refresh(pageNo);}
+	};
+};
+
+</script>
+
+<tpl id="gridTools"><tpl id="toolItems">
+		<div class="tool {clz}"><span class="label">{text}:</span>{html}</div>
+	</tpl>
+	<div class="tool {clz}"><span class="label">{text}:</span>{fromCombo} -- {toCombo}</div>
+</tpl>
+<tpl id="buttons">
+	<a data-href="$grid.{value}" class="filterBtn tool-{value}"></a>
+</tpl>
+
+<script>
+var tools;
+globalActionConfig([["combo.change", function(params, el){
+	var id = params.key, name = el.innerHTML;
+	var dropdownEl = $XH.ancestor(el, "dropdown");
+	if (!dropdownEl) return;
+	var inputEl = $XD.first(dropdownEl, "input");
+	inputEl.value = id;
+	var nameEl = $XH.first($XH.first(dropdownEl, "dropdown-toggle"), "name");
+	nameEl.innerHTML = name;
+	jQuery(nameEl).attr("title",name);
+	if(window.location.href.indexOf("item")>0)
+		IXW.Pages.load("fault");
+	tools.change();
+}]]);
+
+var filterToolsCfgHT = {
+	"level": {
+		id: "level",
+		items: [{id: "all", name: "所有"}].concat(IX.loop("0".multi(2).split(""), [], function(acc, data, idx){
+			acc.push({
+				id: idx+1,
+				name: TNM.Const.FaultLevels[idx+1]
+			});
+			return acc;
+		}))
+	},
+	"isHandled": {
+		id: "isHandled",
+		items: [{id: "all", name: "所有"}, {id: true, name: "已处理"}, {id: false, name: "未处理"}]
+	},
+	"deviceType": {
+		id: "deviceType",
+		items: [{id: "all", name: "所有类型"}].concat(IX.loop("0-1-2-3-10-50-51-52-53-54-65-60-61-62-63-64-90".split("-"), [], function(acc, item, idx){
+			acc.push({
+				id: item,
+				name: deviceType[item]
+			});
+			return acc;
+		}))
+	},
+	"userId": {
+		id: "userId",
+		items: [{id: "all", name: "所有用户"}]
+	}
+};
+
+
+IX.ns("TNM.Lib");
+/*
+	cfg: {
+			buttons: [{value}],
+			hasDate: true/false,
+			dateText,
+			toolList,
+			toolItems: [
+				{clz, text, html}
+			]
+		}
+
+ */
+TNM.Lib.BaseFilterTools = function(cfg){
+	var fn = null;
+	var toolList = $XP(cfg, "toolList", []);
+	var hasDate = $XP(cfg, "hasDate", "");
+	var buttons = $XP(cfg, "buttons", "");
+	var dateValue = {};
+	var defaultDate=cfg.defaultDate;
+
+	function getTimeCombo(cfg){
+		var type = cfg.type;
+		cfg.dataAttrs = [["key", type]];
+		cfg.timeFmt = "hh:mm";
+		cfg.onchange = function(newValue){
+			var nowTime=Math.floor(new Date().getTime()/1000);
+			var fromStr=jQuery("[data-key='from']").find("input").val();
+ 			var toStr=jQuery("[data-key='to']").find("input").val();
+ 				fromStr = new Date(fromStr.replace(/-/g,'/')).getTime()/1000;
+ 				toStr= new Date(toStr.replace(/-/g,'/')).getTime()/1000;
+ 			var curDay=TNM.Lib.GetCurDay();
+ 			var time;
+ 				if(newValue>nowTime&&newValue==toStr){
+ 					time=getLocalTime(nowTime,false);
+ 					NV.Dialog.alert("时间设置不能超过当前时间！");
+ 					jQuery(".ixw-dpt:last input").attr("value",time);
+ 				}
+ 				if(fromStr>toStr){
+ 					if(newValue==fromStr){
+	 					time=getLocalTime(toStr,true);
+	 					NV.Dialog.alert("开始时间必须小于结束时间！");
+	 					jQuery(".ixw-dpt:first input").attr("value",time);
+ 					}else{
+ 						time=getLocalTime(nowTime,false);
+	 					NV.Dialog.alert("开始时间必须小于结束时间！");
+	 					jQuery(".ixw-dpt:last input").attr("value",time);
+ 					}
+ 				}
+
+			change();
+		};
+		var dpt = new IXW.Lib.DatePickTrigger(cfg);
+		return dpt;
+	}
+	function getLocalTime(nS,bool) {
+		var myDate= new Date(parseInt(nS) * 1000);
+		var str=myDate.getFullYear()+"-"+(myDate.getMonth()+1)+"-"+myDate.getDate()+" "+myDate.getHours()+":"+myDate.getMinutes();
+		var arr=str.split(" ");
+		if(bool){
+			arr[1]="00:00";
+			var acc=arr[0].split("-");
+			for(var i=1;i<3;i++){
+				if(acc[i].length<2)
+					acc[i]="0"+acc[i];
+			}
+			arr[0]=acc.join("-");
+			str=arr.join(" ");
+		}
+		return str;
+	}
+
+	function getCombo(cfg, num){
+		return getComboHTML(cfg.id, {
+			value: num ? cfg.items[num].id : cfg.items[0].id,
+			valueText: num ? cfg.items[num].name : cfg.items[0].name,
+			items: IX.loop(cfg.items, [], function(acc, item, idx){
+				acc.push(IX.inherit(item, item.action ? {} : {action: "combo.change"}));
+				return acc;
+			})
+		});
+	}
+ 	function getHTML(list){
+ 		return IX.loop(list, [], function(acc, item, idx){
+ 			var obj = {
+ 				clz: (item.id=="userId") ? item.id+" disable": item.id,
+ 				text: item.text,
+ 				html: (item.id=="ip") ? "<input id='ip' />":getCombo(item.items ? item.items : filterToolsCfgHT[item.id],item.num ? item.num : null)
+ 			};
+ 			acc.push(obj);
+ 			return acc;
+ 		});
+ 	}
+ 	function getFilterParams(){
+ 		if(hasDate){
+ 			var fromStr=jQuery("[data-key='from']").find("input").val();
+ 			var toStr=jQuery("[data-key='to']").find("input").val();
+ 			var ipStr=jQuery("#ip").val();
+ 			var isIp=checkIfIP(ipStr);
+ 			if(fromStr!==""){
+ 				fromStr = fromStr.replace(/-/g,'/');
+ 				dateValue.from = new Date(fromStr).getTime()/1000;
+ 			}else{
+ 				dateValue.from = null;
+ 			}
+ 			if(toStr!==""){
+ 				toStr=toStr.replace(/-/g,'/');
+ 				dateValue.to = new Date(toStr).getTime()/1000;
+ 			}else{
+ 				dateValue.to = null;
+ 			}
+ 			if(!isIp&&ipStr!==""&&ipStr!==undefined){
+ 				NV.Dialog.alert("IP地址格式不正确！");
+ 				// jQuery("#ip").focus();
+ 				return false;
+ 			}
+ 			if(dateValue.from>dateValue.to){
+ 				NV.Dialog.alert("开始时间必须小于结束时间！");
+ 				return false;
+ 			}
+ 		}
+ 		var acc = IX.loop(toolList, {}, function(acc, item, idx){
+ 			acc[item.id] = $X(item.id).value;
+ 			return acc;
+ 		});
+ 		return IX.inherit(dateValue, acc);
+ 	}
+ 	function change(){
+ 		fn(getFilterParams());
+ 	}
+
+	return {
+		getHTML: function(){
+			var listHTML = t_gridTools.renderData("", {
+	 			text: $XP(cfg, "dateText") || "时间",
+	 			clz: hasDate ? "date" : "disabled",
+				fromCombo: getTimeCombo({
+					type : "from", 
+					value: (!defaultDate) ? "" : (defaultDate=="default") ? TNM.Lib.GetCurDay() : defaultDate, 
+					label : ""
+				}).getHTML(),
+				toCombo: getTimeCombo({
+					type : "to", 
+					value: (!defaultDate) ? "" : (defaultDate=="default") ? new Date().getTime()/1000 : defaultDate+60, 
+					label : ""
+				}).getHTML(),
+				toolItems: getHTML(toolList)
+			});
+	 		return buttons ? (IX.loop(buttons, "", function(acc, button, idx){
+	 			acc += t_buttons.renderData("", button);
+	 			return acc;
+	 		}) + listHTML) : listHTML; 
+		},
+		change: change,
+		getFilterParams: function(){return getFilterParams();},
+		onchange: function(_fn){ 
+			fn = _fn;
+		}
+	};
+};
+function checkIfIP(s){
+	var re =  /^([0-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.([0-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.([0-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.([0-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])$/;
+	return re.test(s);
+}
+TNM.Lib.GetCurDay=function(){
+	function NewDate(str) { 
+		str = str.split('-'); 
+		var date = new Date(); 
+		date.setUTCFullYear(str[0], str[1] - 1, str[2]); 
+		date.setUTCHours(-8, 0, 0, 0); 
+		return date; 
+	} 
+	function getDate(){
+		var myDate = new Date();
+		var str=myDate.getFullYear()+"-"+(myDate.getMonth()+1)+"-"+myDate.getDate();
+		var date=NewDate(str);
+		return date.getTime()/1000;
+	}
+	return getDate();
+};
+/** cfg{
+		container,
+		title : "xxx",
+		clz : ,
+		columns: columns,
+		actions : [],
+		baseParams,
+		usePagination : $XP(cfgs, "usePagination") || true,
+		tool: BaseFilterTools
+	}
+*/
+
+TNM.Lib.FilterGrid = function(cfg){
+	var container = $XP(cfg,  "container");
+	var id = cfg.id || IX.id();
+	var usePagination = $XP(cfg, "usePagination", true);
+	tools = $XP(cfg, "tools");
+	var baseParams = $XP(cfg, "baseParams");
+	var filterParams = null;
+
+	var grid = new IXW.Lib.Grid(IX.inherit(cfg, {
+		id : id + "-grid",
+		pageSize : currentPageSize.value,
+		dataLoader : function(params, cbFn){
+			if(filterParams && filterParams.query)
+				params.pageNo = 0;
+			var data = IX.inherit(params, baseParams, filterParams);
+			if(filterParams)
+				filterParams.query = false;
+			$XF(cfg, "dataLoader")(data, cbFn);
+		}
+	}));
+
+	var model = grid.getModel();
+
+	function applyHover(){
+		jQuery($X(container)).find(".row").hover(
+			function(){$XH.addClass(this, "hover");},
+			function(){$XH.removeClass(this, "hover");}
+		);
+	}
+	function _getSelectedCells(){
+		return jQuery("#" + id + "-grid").find(".row .selected");
+	}
+	
+	var pagin =	null, onselectRow = IX.emptyFn;
+	function afterLoaded(pageNo, items, onlyData){
+		grid.refresh(onlyData);
+		if (!onlyData)
+			applyHover();
+		if(pagin)
+			pagin.refresh(model.getPageCount(), pageNo, items.length, onlyData);
+	}
+	function loadPage(pageNo){
+		model.load(pageNo, function(items){afterLoaded(pageNo, items);});
+	}
+
+	if (usePagination){
+		pagin = new NVPagination(id);
+		pagin.bind(loadPage, function(pageNo, pageSize){
+			model.resetPage(pageNo, pageSize, function(items){
+				afterLoaded(pageNo, items);
+			});
+		});
+	}
+
+	function _show(items){
+		var el = $X(container);
+		if (!el)
+			return;
+		afterLoaded(0, items, true);
+		el.innerHTML = t_grid.renderData("", {
+			id : id, 
+			gridClz : $XP(cfg, "clz", ""),
+			title : $XP(cfg, "title",  ""),
+			toolHTML : tools ? tools.getHTML() :"",
+			gridHTML : grid.getHTML(),
+			paginHTML : pagin?pagin.getHTML() : ""
+		});
+		applyHover();
+	}
+	function _refresh(pageNo){
+		if (pagin) pagin.jump(pageNo);
+		else loadPage(0);
+	}
+
+	var TnmGrid = {
+		getModel : function(){return model;},
+		getSelectedRows : 	function(){
+			return IX.map(_getSelectedCells(), function(el){
+				var _el = $XH.ancestor(el, "row");
+				return model.getRow($XD.dataAttr(_el, "id"));
+			});
+		},
+		show: function(){model.load(0, _show);},
+		refresh : function(pageNo){_refresh(pageNo);}
+	};
+	TnmGrid.show();
+
+	tools.onchange(function(params){
+		if(!params)
+			return;
+		params.query=true;
+		filterParams = params; 
+		TnmGrid.refresh(0);
+	});
+
+	return TnmGrid;
+};
+</script>
+
