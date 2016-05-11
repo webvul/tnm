@@ -123,7 +123,7 @@ var Users = {
 	users : []
 };
 var SNames = "赵钱孙李周吴郑王刘花辛魏宋马朱陆".split("");
-var LNames = "系统部署时由超级用户创建拥有创建修改删除各自车站的普通用户及赋予权限拥有创建修改删除等权限不能登陆以及云台控制等权限".split("");
+var LNames = "系统部署时由超级用户创建拥有创建修改删除各自车站的普通用户及赋予权限拥有创建修改删除等权限不能登录以及云台控制等权限".split("");
 function genUser(idx){
 	var username = getRandomItem(SNames) + getRandomItem(LNames) +  getRandomItem(LNames);
 	var site = getRandomItem(Sites);
@@ -167,7 +167,7 @@ Test.getSession = function(){
 };
 
 var faultId = 0;
-var faultDevieType= [0,1, 2, 10, 20,21,22, 31,32,33, 40,41, 50,51,52,53,54, 60,61,62,63,64];
+var faultDevieType= [0,1, 2, 10, 20,21,22, 31,32,33, 40,41, 50,51,52,53,54, 55,60,61,62,63,64];
 var faultCode = [0,1,2,3,4,100,101,102,103];
 function genFault(timeTick){
 	return {
@@ -401,7 +401,12 @@ var Logs=[
 	ip:"127.0.0.1",
 	desc: "测试10"
 }
-]
+];
 
+Test.isKicked = function(){
+	return {
+		status: 0
+	};
+};
 
 })();

@@ -104,8 +104,8 @@ function createLogsGrid(){
 			siteId: "all",
 			deviceType: "all",
 			userId: "all",
-			from: TNM.Lib.GetCurDay(),
-			to: Math.floor(new Date().getTime()/1000),
+			from: TNM.Lib.GetCurDay().from,
+			to: TNM.Lib.GetCurDay().to,
 			ip:""
 		},
 		dataLoader : function(params, _cbFn){
@@ -147,8 +147,18 @@ function showLogs(cbFn){
 	<div id="Tree" class="{clz}"><div id="treeName">{treeName}</div>{treeData}</div>
 	<div class="nv-box {clz}">
 		<div class="nvgrid-title nv-title">性能监控</div>
+		<div class="server-info">
+			<div class="site-name">{siteName}</div>
+			<div class="server-space"></div>
+			<div class="server-name">{serverName}</div>
+		</div>
 		<div id="container"></div>
 	</div>
+</tpl>
+
+<tpl id="baseInfo">
+	<div id="Tree" class="{clz}"><div id="treeName">{treeName}</div>{treeData}</div>
+	<div id="container"></div>
 </tpl>
 
 <tpl id="statistics">
@@ -157,36 +167,29 @@ function showLogs(cbFn){
 </div>
 </tpl>
 <script>
-var dashboards=null;
+var dashboards = null;
+var checker = null;
 function getDevices(cbFn){
 	deviceCaller("getDevicesForMonitor", {types:[0,1,2,3]}, function(data){
-		var arrCount=IX.loop(data, [], function(acc, site){
-		var Site = TCM.LineInfo.getSites().get(site.siteId);
-		if(Site){
-			var resultAll=[];
-			var axx=IX.loop(site.devices, [], function(arr, device){
-				var result;
-				if(device){
-					result=IX.loop(device.items, [], function(ayy, item){
-						if(item){
-							ayy.push({key:[item.id],name:item.name,id:item.id,nodes:[]}); 
-						}
-						return ayy;
-					});
+		var arrCount = IX.loop(data, [], function(acc, site){
+			var Site = TCM.LineInfo.getSites().get(site.siteId);
+			var obj = {};
+			var keys = [];
+			obj.nodes = IX.loop(site.devices, [], function(arr, device){
+				for (var k = 0; k < device.items.length; k++) {
+					keys.push(device.items[k].id);
+					arr.push({key: [device.items[k].id], name: device.items[k].name, id: device.items[k].id, nodes: []});
 				}
-				resultAll=resultAll.concat(result);
-				return resultAll;
-			
+				return arr;
 			});
-			var azz=IX.loop(axx, [], function(aee, item){
-				if(item){
-					aee.push(item.id);
-				}
-				return aee;
-			});
-			acc.push({key:azz,name:Site.name,siteId:site.siteId,nodes:axx});
-		}
-		return acc;
+			obj.key = keys;
+			obj.name = Site.name;
+			obj.siteId = site.siteId;
+			if (Site.type == 1) 
+				acc.unshift(obj);
+			else
+				acc.push(obj);
+			return acc;
 		});
 		cbFn({nodes : arrCount});
 	});
@@ -194,11 +197,20 @@ function getDevices(cbFn){
 
 function devicTreeClick(params){
 	var types = IX.map(params.keys.split(","),function(type){return Number(type);});
+	if (params.keys.split(",").length > 1){
+		jQuery(".site-name").html(params.name);
+		jQuery(".server-name").html(jQuery(params.el.parentNode).find("ul>li>a:first").attr("data-name"));
+	}else{
+		jQuery(".site-name").html(jQuery($XH.ancestor(params.el, "fold")).find("a:first").attr("data-name"));
+		jQuery(".server-name").html(params.name);
+	} 
 	dashboards = new TNM.Lib.DashboardPanel($X('container'), function(dataFn, failFn){
 		monitorCaller("getPerf", {id: types[0]}, dataFn, failFn);
 		resizeFn();
 	});
-	var checker = new TNM.Util.PeriodicChecker(function(){
+	if (checker)
+		checker.stop();
+	checker = new TNM.Util.PeriodicChecker(function(){
 		return $XH.first($X('container'), "mem");
 	}, dashboards.refresh, 15000);
 	setTimeout(function(){checker.start();}, 15000);
@@ -245,7 +257,9 @@ function monitoPerf(cbFn){
 		$X('body').innerHTML = t_infotree.renderData("", {
 			treeName : "线路设备列表",
 			treeData : tree.getHTML(),
-			clz : "monitor"
+			clz : "monitor",
+			siteName: "",
+			serverName: ""
 		});
 		showTreeNode();
 		jQuery(".nv-tree li:first a:first span:last").click();
@@ -291,8 +305,8 @@ function createStatisticsGrid(){
 		baseParams: {
 			siteId: "all",
 			deviceType: "all",
-			from: TNM.Lib.GetCurDay(),
-			to: Math.floor(new Date().getTime()/1000)
+			from: TNM.Lib.GetCurDay().from,
+			to: TNM.Lib.GetCurDay().to
 		},
 		dataLoader : function(params, _cbFn){
 			monitorCaller("getStatistics", params, function(data){
@@ -320,6 +334,63 @@ function showStatistic(cbFn){
 	createStatisticsGrid();
 	cbFn();
 }
+
+function baseTreeClick(params){
+	function versionFn(result, device){
+		var $a =jQuery(".row[data-id="+device.id+"]").find(".col-version>a");
+		$a.attr("title", result.version || result.err).html(result.version || result.err);	
+	}
+	var grid = new NV.Lib.Grid({
+		container: 'container',
+		clz : "monitor-base",
+		title : "基础信息",
+		usePagination : true,
+		columns : ["baseName", "baseType", "baseIP", "baseVersion"],
+		actions : [],
+		tools : {},
+		dataLoader : function(_params, _cbFn){
+			monitorCaller("getBaseInfo", IX.inherit(_params, {id: params.keys}), function(data){
+				_cbFn(data);
+				jQuery("#Tree").css("height", jQuery(".nv-grid").height());
+				IX.iterate(data.items, function(device, idx){
+					monitorCaller("getVersion", {
+						siteId: params.keys,
+						id: device.id,
+						type: device.type
+					}, function(result){
+						versionFn(result, device);
+					}, function(result){
+						versionFn(result, device);
+					});
+				});
+			});
+		}
+	});
+	grid.show();
+}
+
+function showBase(cbFn){
+	var cfg = IX.inherit({
+		htmlFn : function(node) {return node.name;},
+		click : baseTreeClick
+	}, {nodes: IX.map(lineInfo, function(site, idx){
+		return {
+			name: site.name,
+			key: [site.id],
+			siteId: site.id,
+			nodes: []
+		};
+	})});
+	var tree = new TCM.Lib.Tree(cfg);
+	$X('body').innerHTML = t_baseInfo.renderData("", {
+		treeName : "线路列表",
+		treeData : tree.getHTML(),
+		clz : "monitor"
+	});
+	jQuery(".nv-tree li:first a:first span:last").click();
+	cbFn();
+}
+
 function switchOut(currentContext, nextContext){
 	var pageName = currentContext.name;
 	if(pageName == "monitor-perf")
@@ -327,7 +398,7 @@ function switchOut(currentContext, nextContext){
 }
 IX.ns("TNM.Monitor");
 TNM.Monitor.init = function(pageCfg, pageParams, cbFn){
-	pageCfg.switchOut=switchOut;
+	pageCfg.switchOut = switchOut;
 	lineInfo = IX.loop(TCM.LineInfo.getSites().getAll(), [], function(acc, site, idx){
 		if(site.type == "1" ||site.type == "2" || site.type == "3")
 			acc.push(site);
@@ -343,6 +414,9 @@ TNM.Monitor.init = function(pageCfg, pageParams, cbFn){
 		break;
 	case "monitor-logs":
 		showLogs(cbFn);
+		break;
+	case "monitor-base":
+		showBase(cbFn);
 		break;
 	}
 };

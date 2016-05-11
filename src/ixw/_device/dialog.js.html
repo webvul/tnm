@@ -52,6 +52,24 @@ var getNodeName = TCM.DeviceType.getNodeName;
 </ul>
 </tpl>
 
+<tpl id="editSpecialDecoder">
+<ul class="{clz}">
+	<li><span class="label">名称</span>
+		<span><input class="readOnly" disabled="disabled" maxlength="64" id="device_name" value="{device_name}"></span></li>
+	<li><span class="label">IP地址</span>
+		<span><input class="readOnly" disabled="disabled" maxlength="15" id="device_ip" value="{device_ip}"></span></li>
+	<li><span class="label">用户名</span>
+		<span><input class="readOnly" disabled="disabled" maxlength="15" id="device_username" value="{device_username}"></span></li>
+	<li><span class="label">密码</span>
+		<span><input class="readOnly" disabled="disabled" maxlength="15" id="device_password" value="{device_password}"></span></li>
+	<li><span class="label">备注</span>
+		<span><input class="readOnly" disabled="disabled" id="device_desc" value="{device_desc}"></span></li>
+	<li><span class="label">登录方式</span>
+		<span><input class="loginIp" maxlength="15" id="device_loginIp" placeholder="IP" value="{device_loginIp}">
+		<input class="loginPort" maxlength="5" id="device_loginPort" placeholder="PORT" value="{device_loginPort}"></span></li>
+</ul>
+</tpl>
+
 <tpl id="editIPC">
 <ul class="{clz}">
 	<li><span class="label">设备名称</span>
@@ -124,6 +142,13 @@ var deviceDialogCfg = {
 	decoder: {
 		clz : "decoder-edit",
 		tpl : t_editDecoder,
+		checkers : checkersBase.concat([
+			{name : "ip", key: "device_ip", empty : "设备IP"}
+		])
+	},
+	specialDecoder: {
+		clz : "decoder-edit",
+		tpl : t_editSpecialDecoder,
 		checkers : checkersBase.concat([
 			{name : "ip", key: "device_ip", empty : "设备IP"}
 		])

@@ -118,7 +118,8 @@ function Dashboard(el, cfg){
 			valueEl.innerHTML = getValue(used, cfg.unit, cfg.type);
 
 			_total = Math.max(1, total);
-			_curDeg = 360 * used / _total;
+			_curDeg = 360 * used / _total ;
+
 
 			setTimeout(function(){
 				refreshProgress(pointerEl, 360, _curDeg);
@@ -136,6 +137,7 @@ function Dashboard(el, cfg){
 
 function DashBoards(container, dataCaller){
 	var dashboards = {};
+	var isInit = false;
 	var types = IX.map(DashboardItems, function(item){
 		var itemType = item.type;
 		dashboards[itemType]  = new Dashboard($XH.first(container, itemType), item);
@@ -144,9 +146,13 @@ function DashBoards(container, dataCaller){
 	function load(itemFn, failFn){
 		dataCaller(function(data){
 			IX.iterate(types, function(itemType){
+				if (!isInit) 
+					dashboards[itemType].reset.apply(null, data[itemType]);
 				itemFn(dashboards[itemType], data[itemType]);
 			});
+			isInit = true;
 		}, function(data){
+			isInit = false;
 			var qstr = window.location.href;
 			qstr = qstr.slice(qstr.length-4);
 			if(failFn)

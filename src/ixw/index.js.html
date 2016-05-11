@@ -7,6 +7,26 @@ var DeviceTypeNames = TCM.Const.DeviceTypeNames;
 //var FaultLevels = TNM.Const.FaultLevels;
 var FaultFormats = TNM.Const.FaultFormats;
 
+var kickChecker = new TNM.Util.KickChecker("", function(isStarted, cbFn){
+	TNM.Global.commonCaller("isKicked", "", function(data){
+		if (data && data.status === 1) {
+			return NV.Dialog.confirm4login("提示", "有新管理员登录系统，请您退出！",{
+				left : [],
+				right : [{name : "ok",text : "确定"}]
+			},function(){
+				clearSession();
+			});
+		}
+		isStarted = true;
+		cbFn();
+	});
+}, 1);
+
+function startChecker(){
+	kickChecker.stop();
+	kickChecker.start();
+}
+
 var nvCache = (function(){
 	var _ls = window.localStorage;
 	return {
@@ -233,7 +253,8 @@ var NavItems = [
 ["monitor", "监控信息", [
 	["monitor-perf", "性能监控"],
 	["monitor-stat", "统计分析"],
-	["monitor-logs", "操作日志"]
+	["monitor-logs", "操作日志"],
+	["monitor-base", "基础信息"]
 ]]
 ];
 var DefaultNav = "sys-line";
@@ -301,13 +322,14 @@ var rtfw = new RTFaultWorker();
 function clearSession(){
 	sessionMgr = new SessionManager();
 	TCM.LineInfo.destroy();
+	kickChecker.stop();
 	IXW.Pages.load("entry");
 	rtfw.stop();
 }
 function startSession(data){
 	TCM.LineInfo.init(data.lineInfo);
 	sessionMgr = new SessionManager(data);
-	latestFaultId=null;
+	latestFaultId = null;
 	rtfw = new RTFaultWorker();
 	document.body.innerHTML = t_page.renderData("",{
 		nav : navMgr.getRenderData(),
@@ -315,6 +337,7 @@ function startSession(data){
 	});
 	navMgr.enableHover();
 	rtfw.start();
+	startChecker();
 }
 
 var PagesConfiurations = IX.map([
@@ -340,6 +363,7 @@ var PagesConfiurations = IX.map([
 {name: "monitor-perf"},
 {name: "monitor-stat"},
 {name: "monitor-logs"},
+{name: "monitor-base"},
 
 {name: "entry", bodyClz: "entry", needAuth : false}
 ], function(item){
@@ -429,6 +453,8 @@ TNM.Env.resetSession = function(data){startSession(data);};
 TNM.Env.getSession = function(){return sessionMgr;};
 TNM.Env.getLocalStroage = function(){return nvCache.getItem("tnmSessionKey");};
 TNM.Env.clearLocalStroage = function(){return nvCache.clear();};
+TNM.Env.clearRTFaultWorker = function(){rtfw.stop();};
+TNM.Env.isKicked = function(){kickChecker.stop();};
 
 var appInitialized = false;
 TNM.init = function(){

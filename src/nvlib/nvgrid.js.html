@@ -79,11 +79,11 @@ function NVPagination(id){
 			};
 		},
 		jump : inst.jump,
-		refresh : function(totalPages, currentPageNo, itemNum, onlyData){
+		refresh : function(totalPages, currentPageNo, itemNum, onlyData, total){
 			inst.apply(currentPageNo, totalPages, onlyData);
 			tpldata.paginHTML = inst.getHTML();
-			var stx = currentPageNo * currentPageSize.value;
-			tpldata.indics = [{stx : stx, endx : stx + itemNum, pagex : itemNum}];
+			var stx = total !== 0 ? (currentPageNo * currentPageSize.value + 1) : 0;
+			tpldata.indics = [{stx : stx, endx : Math.max((stx + itemNum - 1), 0), pagex : total}];
 			var el = $X(id + "-indics");
 			if (!onlyData && el)
 				 el.innerHTML = t_pagin.renderData("indics", tpldata.indics[0]);
@@ -198,7 +198,7 @@ NV.Lib.Grid = function(cfg){
 		if (!onlyData)
 			applyHover();
 		if(pagin)
-			pagin.refresh(model.getPageCount(), pageNo, items.length, onlyData);
+			pagin.refresh(model.getPageCount(), pageNo, items.length, onlyData, model.getTotal());
 		if (tools)
 			tools.disable();
 	}
@@ -334,7 +334,7 @@ var filterToolsCfgHT = {
 	},
 	"deviceType": {
 		id: "deviceType",
-		items: [{id: "all", name: "所有类型"}].concat(IX.loop("0-1-2-3-10-50-51-52-53-54-65-60-61-62-63-64-90".split("-"), [], function(acc, item, idx){
+		items: [{id: "all", name: "所有类型"}].concat(IX.loop("0-1-2-3-10-20-21-22-50-53-54-55-60-61-62-63-64-90".split("-"), [], function(acc, item, idx){
 			acc.push({
 				id: item,
 				name: deviceType[item]
@@ -370,40 +370,6 @@ TNM.Lib.BaseFilterTools = function(cfg){
 	var dateValue = {};
 	var defaultDate=cfg.defaultDate;
 
-	function getTimeCombo(cfg){
-		var type = cfg.type;
-		cfg.dataAttrs = [["key", type]];
-		cfg.timeFmt = "hh:mm";
-		cfg.onchange = function(newValue){
-			var nowTime=Math.floor(new Date().getTime()/1000);
-			var fromStr=jQuery("[data-key='from']").find("input").val();
- 			var toStr=jQuery("[data-key='to']").find("input").val();
- 				fromStr = new Date(fromStr.replace(/-/g,'/')).getTime()/1000;
- 				toStr= new Date(toStr.replace(/-/g,'/')).getTime()/1000;
- 			var curDay=TNM.Lib.GetCurDay();
- 			var time;
- 				if(newValue>nowTime&&newValue==toStr){
- 					time=getLocalTime(nowTime,false);
- 					NV.Dialog.alert("时间设置不能超过当前时间！");
- 					jQuery(".ixw-dpt:last input").attr("value",time);
- 				}
- 				if(fromStr>toStr){
- 					if(newValue==fromStr){
-	 					time=getLocalTime(toStr,true);
-	 					NV.Dialog.alert("开始时间必须小于结束时间！");
-	 					jQuery(".ixw-dpt:first input").attr("value",time);
- 					}else{
- 						time=getLocalTime(nowTime,false);
-	 					NV.Dialog.alert("开始时间必须小于结束时间！");
-	 					jQuery(".ixw-dpt:last input").attr("value",time);
- 					}
- 				}
-
-			change();
-		};
-		var dpt = new IXW.Lib.DatePickTrigger(cfg);
-		return dpt;
-	}
 	function getLocalTime(nS,bool) {
 		var myDate= new Date(parseInt(nS) * 1000);
 		var str=myDate.getFullYear()+"-"+(myDate.getMonth()+1)+"-"+myDate.getDate()+" "+myDate.getHours()+":"+myDate.getMinutes();
@@ -421,6 +387,34 @@ TNM.Lib.BaseFilterTools = function(cfg){
 		return str;
 	}
 
+	function getTimeCombo(cfg){
+		var type = cfg.type;
+		cfg.dataAttrs = [["key", type]];
+		cfg.timeFmt = "hh:mm";
+		cfg.onchange = function(newValue){
+			var nowTime=Math.floor(new Date().getTime()/1000);
+			var fromStr=jQuery("[data-key='from']").find("input").val();
+ 			var toStr=jQuery("[data-key='to']").find("input").val();
+ 				fromStr = new Date(fromStr.replace(/-/g,'/')).getTime()/1000;
+ 				toStr= new Date(toStr.replace(/-/g,'/')).getTime()/1000;
+ 			var time;
+			if(fromStr>toStr){
+				if(newValue==fromStr){
+					time=getLocalTime(toStr,true);
+					NV.Dialog.alert("开始时间必须小于结束时间！");
+					jQuery(".ixw-dpt:first input").attr("value",time);
+				}else{
+					time=getLocalTime(nowTime,false);
+					NV.Dialog.alert("开始时间必须小于结束时间！");
+					jQuery(".ixw-dpt:last input").attr("value",time);
+				}
+			}
+			change();
+		};
+		var dpt = new IXW.Lib.DatePickTrigger(cfg);
+		return dpt;
+	}
+	
 	function getCombo(cfg, num){
 		return getComboHTML(cfg.id, {
 			value: num ? cfg.items[num].id : cfg.items[0].id,
@@ -487,12 +481,12 @@ TNM.Lib.BaseFilterTools = function(cfg){
 	 			clz: hasDate ? "date" : "disabled",
 				fromCombo: getTimeCombo({
 					type : "from", 
-					value: (!defaultDate) ? "" : (defaultDate=="default") ? TNM.Lib.GetCurDay() : defaultDate, 
+					value: (!defaultDate) ? "" : (defaultDate=="default") ? TNM.Lib.GetCurDay().from : defaultDate, 
 					label : ""
 				}).getHTML(),
 				toCombo: getTimeCombo({
 					type : "to", 
-					value: (!defaultDate) ? "" : (defaultDate=="default") ? new Date().getTime()/1000 : defaultDate+60, 
+					value: (!defaultDate) ? "" : (defaultDate=="default") ? TNM.Lib.GetCurDay().to : defaultDate+60, 
 					label : ""
 				}).getHTML(),
 				toolItems: getHTML(toolList)
@@ -513,21 +507,26 @@ function checkIfIP(s){
 	var re =  /^([0-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.([0-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.([0-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.([0-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])$/;
 	return re.test(s);
 }
-TNM.Lib.GetCurDay=function(){
-	function NewDate(str) { 
+TNM.Lib.GetCurDay = function(){
+	function NewDate(str, status) { 
 		str = str.split('-'); 
 		var date = new Date(); 
 		date.setUTCFullYear(str[0], str[1] - 1, str[2]); 
-		date.setUTCHours(-8, 0, 0, 0); 
+		if (status == "from")
+			date.setUTCHours(-8, 0, 0, 0); 
+		else 
+			date.setUTCHours(16, 0, 0, 0); 
 		return date; 
 	} 
-	function getDate(){
+	function getDate(status){
 		var myDate = new Date();
-		var str=myDate.getFullYear()+"-"+(myDate.getMonth()+1)+"-"+myDate.getDate();
-		var date=NewDate(str);
-		return date.getTime()/1000;
+		var str = myDate.getFullYear()+"-"+(myDate.getMonth()+1)+"-"+myDate.getDate();
+		return NewDate(str, status).getTime()/1000;
 	}
-	return getDate();
+	return {
+		from: getDate("from"),
+		to: getDate("to")
+	};
 };
 /** cfg{
 		container,
@@ -580,7 +579,7 @@ TNM.Lib.FilterGrid = function(cfg){
 		if (!onlyData)
 			applyHover();
 		if(pagin)
-			pagin.refresh(model.getPageCount(), pageNo, items.length, onlyData);
+			pagin.refresh(model.getPageCount(), pageNo, items.length, onlyData, model.getTotal());
 	}
 	function loadPage(pageNo){
 		model.load(pageNo, function(items){afterLoaded(pageNo, items);});

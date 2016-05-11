@@ -141,6 +141,8 @@ TCM.DeviceType.getNodeName = function(type){
 		return "coder";
 	case TCM.Const.DeviceTypes.Decoder:
 		return "decoder";
+	case TCM.Const.DeviceTypes.SpecialDecoder:
+		return "specialDecoder";
 	case TCM.Const.DeviceTypes.Spliter:
 		return "spliter";
 	case TCM.Const.DeviceTypes.Monitor:

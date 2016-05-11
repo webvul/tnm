@@ -167,7 +167,7 @@ IX.iterate([
 	return item.maxWindow || "";
 });}],
 ["devUserName", function(){return getCommonColumnModel("userName", "用户名", function(item){
-	return item.userName || "admin";
+	return item.username || "admin";
 }, true);}],
 ["devPassWord", function(){return getCommonColumnModel("password", "密码", function(item){
 	return item.password || "******";
@@ -259,9 +259,20 @@ IX.iterate([
 });}],
 ["details", function(){return getCommonColumnModel("details", "", function(item){
 	return "<div class='arr-up'></div><span class='desc-detail'></span>";
-});}]
+});}],
 
-
+["baseName", function(){return getCommonColumnModel("name", "服务器名称", function(item){
+	return item.name || "";
+}, true);}],
+["baseType", function(){return getCommonColumnModel("type", "服务类型", function(item){
+	return TCM.Const.DeviceTypeNames[item.type] || "";
+}, true);}],
+["baseIP", function(){return getCommonColumnModel("ip", "IP地址", function(item){
+	return item.ip || "";
+}, true);}],
+["baseVersion", function(){return getCommonColumnModel("version", "版本信息", function(item){
+	return item.version || '';
+}, true);}]
 
 ], function(col){
 	var name = col[0], fn = col[1];

@@ -15,6 +15,19 @@
 		span.pic-{width: 0;}
 	}
 }
+.monitor{
+	.server-info{height: 40px; background: #fff; padding: 10px 30px;
+		&>div{display: inline-block;}
+		.server-space{.x-pic; .x-pic-arrow-up; padding: 5px 6px; .x-transform(rotate(90deg)); margin:0 5px;}
+	}
+}
+.monitor-base{
+	.nvgrid-tools{display: none;}
+	.col-name{width: 20%;}
+	.col-type{width: 20%;}
+	.col-ip{width: 20%;}
+	.col-version{width: 20%;}
+}
 .body {ul,li,a:hover{cursor:pointer;}}
 .logs{
 	margin-top:10px; position:relative;
@@ -73,7 +86,7 @@
 }
 .monitor{
 	min-height: 658px;
-	#container{position: relative;background-color:#fff;min-height: 613px;}
+	#container{position: relative;background-color:#fff;min-height: 573px;}
 }
 .statistics{
 	.body {

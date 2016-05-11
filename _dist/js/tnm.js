@@ -10,17 +10,17 @@ TCM.Const.DeviceTypes = {
 	IPCFixed: 20, IPCSemiSphere: 21, IPCSphere: 22, 
 	CameraFixed: 31, CameraSemiSphere: 32, CameraSphere: 33, 
 	RedirectPickup: 40, OmnidirectPickup: 41,
-	Coder: 50, Decoder: 51, Spliter: 52, Monitor: 53, Terminal: 54, 
+	Coder: 50, Decoder: 51, Spliter: 52, Monitor: 53, Terminal: 54, SpecialDecoder: 55,
 	HUB: 60, PDH: 61, FiberConvertor: 62, KVM: 63, PDU: 64, VDM: 65,
 	Other: 90
 };
 TCM.Const.DeviceTypeNames = {
-	0: "网管服务器", 1: "视频服务器", 2: "视频分析服务器", 3: "存储服务器",
+	0: "网管服务器", 1: "视频服务器", 2: "视频分析服务器", 3: "存储服务器", 4: "配置管理服务器",
 	10: "存储设备",
 	20: "固定枪机",  21: "半球机",  22: "球机",
 	31: "固定枪机",  32: "半球机",  33: "球机",
 	40: "定向拾音器",41: "全向拾音器",
-	50: "编码器",  51: "解码器",  52: "画面分割器",53: "监视器",  54: "控制终端",
+	50: "编码器",  51: "解码器",  52: "画面分割器",53: "监视器",  54: "控制终端", 55: "解码器",
 	60: "交换机",  61: "光端机",  62: "光纤收发器",63: "数字KVM",64: "数字PDU", 65: "字符叠加器",
 	90: "其他设备"
 };
@@ -52,7 +52,7 @@ TNM.Const.FaultCodes = {
 	ANALYSIS				: 103	// 智能分析报警
 };
 TNM.Const.FaultFormats = {
-	"-1" : "发生未知报警",
+	"-1" : "发生异常报警",
 
 	//脉冲事件
 	101 : "系统初始化",
@@ -66,12 +66,12 @@ TNM.Const.FaultFormats = {
 	117 : "智能报警事件",
 	119 : "OSD信息变化",
 	//设备报警事件
-	201 : "CPU使用率过高报警",
-	203 : "内存使用率过高报警",
+	201 : "CPU使用率过高",
+	203 : "内存使用率过高",
 	205 : "磁盘阵列不能写",
 	207 : "磁盘阵列不能读写",
 	209 : "磁盘阵列没有做RAID",
-	211 : "设备通道损坏",
+	211 : "通道损坏",
 	213 : "端口电压异常",
 	215 : "端口电流异常",
 	217 : "磁盘满",
@@ -85,8 +85,8 @@ TNM.Const.FaultFormats = {
 	233 : "磁盘被拔出或异常",
 	235 : "磁盘插入",
 	//持续事件
-	32768 : "视频丢失停止、视频正常",
-	32769 : "视频丢失发生",
+	32768 : "录像数据恢复、视频正常",
+	32769 : "录像数据丢失",
 	32770 : "运动感知停止",
 	32771 : "运动感知发生",
 	32772 : "视频遮挡停止、视频正常",
@@ -105,8 +105,8 @@ TNM.Const.FaultFormats = {
 	32797 : "发起数字码流传输",
 	32798 : "停止手动录像",
 	32799 : "发起手动录像",
-	32800 : "设备断线后恢复",
-	32801 : "设备发生断线",
+	32800 : "断线后恢复",
+	32801 : "发生断线",
 	32802 : "ROFS报告的错误恢复",
 	32803 : "ROFS报告的错误"
 
@@ -114,7 +114,7 @@ TNM.Const.FaultFormats = {
 
 TNM.Const.LogType = {
 	'-1' :	 "未知日志",
-	0  :	 "用户登陆",
+	0  :	 "用户登录",
 	1  :	 "用户登出",
 	2  :	 "查看实时流",
 	3  :	 "停止查看实时流",
@@ -308,6 +308,8 @@ TCM.DeviceType.getNodeName = function(type){
 		return "coder";
 	case TCM.Const.DeviceTypes.Decoder:
 		return "decoder";
+	case TCM.Const.DeviceTypes.SpecialDecoder:
+		return "specialDecoder";
 	case TCM.Const.DeviceTypes.Spliter:
 		return "spliter";
 	case TCM.Const.DeviceTypes.Monitor:
@@ -335,9 +337,6 @@ TNM.Util.PeriodicChecker = function(condFn, checkFn, interval){
 	var isStarted = false;
 	var intv = interval || CommonQueryInterval;
 	var timers = null;
-	function failFn(data){
-		return false;
-	}
 	function _query(){
 		if (IX.isFn(condFn) && !condFn()){
 			isStarted = false;
@@ -346,10 +345,38 @@ TNM.Util.PeriodicChecker = function(condFn, checkFn, interval){
 		timers = setTimeout(function(){
 			if(isStarted) _query();
 		}, intv);
-		checkFn(failFn);
+		checkFn(function(data){ return false;});
 	}
 	return {
 		start  :function(){
+			if (!isStarted) _query();
+			isStarted = true;
+		},
+		stop : function(){
+			isStarted = false;
+			clearTimeout(timers);
+		}
+	};
+};
+
+TNM.Util.KickChecker = function(condFn, checkFn, interval){
+	var isStarted = false;
+	var intv = interval || CommonQueryInterval;
+	var timers = null;
+	function _query(){
+		if (IX.isFn(condFn) && !condFn()){
+			isStarted = false;
+			return;
+		}
+		timers = function(){
+			return setTimeout(function(){
+				if(isStarted) _query();
+			}, intv);
+		};
+		checkFn(isStarted, timers);
+	}
+	return {
+		start : function(){
 			if (!isStarted) _query();
 			isStarted = true;
 		},
@@ -477,6 +504,7 @@ IXW.Lib.GridModel = function(id, cfg){
 		addItems : dataModel.addItems,
 		removeItems : dataModel.removeItems,
 
+		getTotal : function(){return dataModel.getTotal();},
 		getTpldata : function(){return tpldata;},
 		getPageCount : function(){return Math.ceil(dataModel.getTotal()/pageSize);},	
 		resetPage : function(_pageNo, _pageSize, cbFn){
@@ -664,7 +692,7 @@ IX.iterate([
 	return item.maxWindow || "";
 });}],
 ["devUserName", function(){return getCommonColumnModel("userName", "用户名", function(item){
-	return item.userName || "admin";
+	return item.username || "admin";
 }, true);}],
 ["devPassWord", function(){return getCommonColumnModel("password", "密码", function(item){
 	return item.password || "******";
@@ -756,9 +784,20 @@ IX.iterate([
 });}],
 ["details", function(){return getCommonColumnModel("details", "", function(item){
 	return "<div class='arr-up'></div><span class='desc-detail'></span>";
-});}]
+});}],
 
-
+["baseName", function(){return getCommonColumnModel("name", "服务器名称", function(item){
+	return item.name || "";
+}, true);}],
+["baseType", function(){return getCommonColumnModel("type", "服务类型", function(item){
+	return TCM.Const.DeviceTypeNames[item.type] || "";
+}, true);}],
+["baseIP", function(){return getCommonColumnModel("ip", "IP地址", function(item){
+	return item.ip || "";
+}, true);}],
+["baseVersion", function(){return getCommonColumnModel("version", "版本信息", function(item){
+	return item.version || '';
+}, true);}]
 
 ], function(col){
 	var name = col[0], fn = col[1];
@@ -1022,11 +1061,11 @@ function NVPagination(id){
 			};
 		},
 		jump : inst.jump,
-		refresh : function(totalPages, currentPageNo, itemNum, onlyData){
+		refresh : function(totalPages, currentPageNo, itemNum, onlyData, total){
 			inst.apply(currentPageNo, totalPages, onlyData);
 			tpldata.paginHTML = inst.getHTML();
-			var stx = currentPageNo * currentPageSize.value;
-			tpldata.indics = [{stx : stx, endx : stx + itemNum, pagex : itemNum}];
+			var stx = total !== 0 ? (currentPageNo * currentPageSize.value + 1) : 0;
+			tpldata.indics = [{stx : stx, endx : Math.max((stx + itemNum - 1), 0), pagex : total}];
 			var el = $X(id + "-indics");
 			if (!onlyData && el)
 				 el.innerHTML = t_pagin.renderData("indics", tpldata.indics[0]);
@@ -1141,7 +1180,7 @@ NV.Lib.Grid = function(cfg){
 		if (!onlyData)
 			applyHover();
 		if(pagin)
-			pagin.refresh(model.getPageCount(), pageNo, items.length, onlyData);
+			pagin.refresh(model.getPageCount(), pageNo, items.length, onlyData, model.getTotal());
 		if (tools)
 			tools.disable();
 	}
@@ -1277,7 +1316,7 @@ var filterToolsCfgHT = {
 	},
 	"deviceType": {
 		id: "deviceType",
-		items: [{id: "all", name: "所有类型"}].concat(IX.loop("0-1-2-3-10-50-51-52-53-54-65-60-61-62-63-64-90".split("-"), [], function(acc, item, idx){
+		items: [{id: "all", name: "所有类型"}].concat(IX.loop("0-1-2-3-10-20-21-22-50-53-54-55-60-61-62-63-64-90".split("-"), [], function(acc, item, idx){
 			acc.push({
 				id: item,
 				name: deviceType[item]
@@ -1313,40 +1352,6 @@ TNM.Lib.BaseFilterTools = function(cfg){
 	var dateValue = {};
 	var defaultDate=cfg.defaultDate;
 
-	function getTimeCombo(cfg){
-		var type = cfg.type;
-		cfg.dataAttrs = [["key", type]];
-		cfg.timeFmt = "hh:mm";
-		cfg.onchange = function(newValue){
-			var nowTime=Math.floor(new Date().getTime()/1000);
-			var fromStr=jQuery("[data-key='from']").find("input").val();
- 			var toStr=jQuery("[data-key='to']").find("input").val();
- 				fromStr = new Date(fromStr.replace(/-/g,'/')).getTime()/1000;
- 				toStr= new Date(toStr.replace(/-/g,'/')).getTime()/1000;
- 			var curDay=TNM.Lib.GetCurDay();
- 			var time;
- 				if(newValue>nowTime&&newValue==toStr){
- 					time=getLocalTime(nowTime,false);
- 					NV.Dialog.alert("时间设置不能超过当前时间！");
- 					jQuery(".ixw-dpt:last input").attr("value",time);
- 				}
- 				if(fromStr>toStr){
- 					if(newValue==fromStr){
-	 					time=getLocalTime(toStr,true);
-	 					NV.Dialog.alert("开始时间必须小于结束时间！");
-	 					jQuery(".ixw-dpt:first input").attr("value",time);
- 					}else{
- 						time=getLocalTime(nowTime,false);
-	 					NV.Dialog.alert("开始时间必须小于结束时间！");
-	 					jQuery(".ixw-dpt:last input").attr("value",time);
- 					}
- 				}
-
-			change();
-		};
-		var dpt = new IXW.Lib.DatePickTrigger(cfg);
-		return dpt;
-	}
 	function getLocalTime(nS,bool) {
 		var myDate= new Date(parseInt(nS) * 1000);
 		var str=myDate.getFullYear()+"-"+(myDate.getMonth()+1)+"-"+myDate.getDate()+" "+myDate.getHours()+":"+myDate.getMinutes();
@@ -1364,6 +1369,34 @@ TNM.Lib.BaseFilterTools = function(cfg){
 		return str;
 	}
 
+	function getTimeCombo(cfg){
+		var type = cfg.type;
+		cfg.dataAttrs = [["key", type]];
+		cfg.timeFmt = "hh:mm";
+		cfg.onchange = function(newValue){
+			var nowTime=Math.floor(new Date().getTime()/1000);
+			var fromStr=jQuery("[data-key='from']").find("input").val();
+ 			var toStr=jQuery("[data-key='to']").find("input").val();
+ 				fromStr = new Date(fromStr.replace(/-/g,'/')).getTime()/1000;
+ 				toStr= new Date(toStr.replace(/-/g,'/')).getTime()/1000;
+ 			var time;
+			if(fromStr>toStr){
+				if(newValue==fromStr){
+					time=getLocalTime(toStr,true);
+					NV.Dialog.alert("开始时间必须小于结束时间！");
+					jQuery(".ixw-dpt:first input").attr("value",time);
+				}else{
+					time=getLocalTime(nowTime,false);
+					NV.Dialog.alert("开始时间必须小于结束时间！");
+					jQuery(".ixw-dpt:last input").attr("value",time);
+				}
+			}
+			change();
+		};
+		var dpt = new IXW.Lib.DatePickTrigger(cfg);
+		return dpt;
+	}
+	
 	function getCombo(cfg, num){
 		return getComboHTML(cfg.id, {
 			value: num ? cfg.items[num].id : cfg.items[0].id,
@@ -1430,12 +1463,12 @@ TNM.Lib.BaseFilterTools = function(cfg){
 	 			clz: hasDate ? "date" : "disabled",
 				fromCombo: getTimeCombo({
 					type : "from", 
-					value: (!defaultDate) ? "" : (defaultDate=="default") ? TNM.Lib.GetCurDay() : defaultDate, 
+					value: (!defaultDate) ? "" : (defaultDate=="default") ? TNM.Lib.GetCurDay().from : defaultDate, 
 					label : ""
 				}).getHTML(),
 				toCombo: getTimeCombo({
 					type : "to", 
-					value: (!defaultDate) ? "" : (defaultDate=="default") ? new Date().getTime()/1000 : defaultDate+60, 
+					value: (!defaultDate) ? "" : (defaultDate=="default") ? TNM.Lib.GetCurDay().to : defaultDate+60, 
 					label : ""
 				}).getHTML(),
 				toolItems: getHTML(toolList)
@@ -1456,21 +1489,26 @@ function checkIfIP(s){
 	var re =  /^([0-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.([0-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.([0-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.([0-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])$/;
 	return re.test(s);
 }
-TNM.Lib.GetCurDay=function(){
-	function NewDate(str) { 
+TNM.Lib.GetCurDay = function(){
+	function NewDate(str, status) { 
 		str = str.split('-'); 
 		var date = new Date(); 
 		date.setUTCFullYear(str[0], str[1] - 1, str[2]); 
-		date.setUTCHours(-8, 0, 0, 0); 
+		if (status == "from")
+			date.setUTCHours(-8, 0, 0, 0); 
+		else 
+			date.setUTCHours(16, 0, 0, 0); 
 		return date; 
 	} 
-	function getDate(){
+	function getDate(status){
 		var myDate = new Date();
-		var str=myDate.getFullYear()+"-"+(myDate.getMonth()+1)+"-"+myDate.getDate();
-		var date=NewDate(str);
-		return date.getTime()/1000;
+		var str = myDate.getFullYear()+"-"+(myDate.getMonth()+1)+"-"+myDate.getDate();
+		return NewDate(str, status).getTime()/1000;
 	}
-	return getDate();
+	return {
+		from: getDate("from"),
+		to: getDate("to")
+	};
 };
 /** cfg{
 		container,
@@ -1523,7 +1561,7 @@ TNM.Lib.FilterGrid = function(cfg){
 		if (!onlyData)
 			applyHover();
 		if(pagin)
-			pagin.refresh(model.getPageCount(), pageNo, items.length, onlyData);
+			pagin.refresh(model.getPageCount(), pageNo, items.length, onlyData, model.getTotal());
 	}
 	function loadPage(pageNo){
 		model.load(pageNo, function(items){afterLoaded(pageNo, items);});
@@ -1734,6 +1772,8 @@ function dialogBodyRefresh(bodyEl){
 
 function showDialog(cfg){
 	dialogCfg = cfg;
+	if (jQuery(".confirmLogin").length !== 0)
+		return;
 	if (!dialog)
 		dialog = new IXW.Lib.ModalDialog({
 			id : "nv-dialog",
@@ -1764,6 +1804,7 @@ NV.Dialog.confirm = function(title, msg, okFn){ showDialog({
 NV.Dialog.confirm4login = function(title, msg, btns, okFn){ 
 	showDialog({
 		title : IX.encodeTXT(title),
+		clz: "confirmLogin",
 		btns : btns,
 		content : t_confirm.renderData("", {msg: msg}),
 		listen : { ok : function(){okFn(hideDialog);} }
@@ -1895,7 +1936,8 @@ function Dashboard(el, cfg){
 			valueEl.innerHTML = getValue(used, cfg.unit, cfg.type);
 
 			_total = Math.max(1, total);
-			_curDeg = 360 * used / _total;
+			_curDeg = 360 * used / _total ;
+
 
 			setTimeout(function(){
 				refreshProgress(pointerEl, 360, _curDeg);
@@ -1913,6 +1955,7 @@ function Dashboard(el, cfg){
 
 function DashBoards(container, dataCaller){
 	var dashboards = {};
+	var isInit = false;
 	var types = IX.map(DashboardItems, function(item){
 		var itemType = item.type;
 		dashboards[itemType]  = new Dashboard($XH.first(container, itemType), item);
@@ -1921,9 +1964,13 @@ function DashBoards(container, dataCaller){
 	function load(itemFn, failFn){
 		dataCaller(function(data){
 			IX.iterate(types, function(itemType){
+				if (!isInit) 
+					dashboards[itemType].reset.apply(null, data[itemType]);
 				itemFn(dashboards[itemType], data[itemType]);
 			});
+			isInit = true;
 		}, function(data){
+			isInit = false;
 			var qstr = window.location.href;
 			qstr = qstr.slice(qstr.length-4);
 			if(failFn)
@@ -2128,7 +2175,7 @@ var DeviceTypes = TCM.Const.DeviceTypes;
 var DeviceTypeNames = TCM.Const.DeviceTypeNames;
 var DeviceTypesInRack = [
 	"TNM", "TVS", "TAS", "TVR", "Storage",
-	"Coder", "Decoder", "Spliter", 
+	"Coder", "Decoder", "Spliter", "SpecialDecoder",
 	"HUB", "PDH", "FiberConvertor", "KVM", "PDU"
 ];
 var MaxUnitInRack = TNM.Const.MaxUnitInRack;
@@ -2248,7 +2295,10 @@ function editRackDeviceDialog(device, siteId, rack){
 		var newDeviceId = $X('device4Rack').value;
 		var stxPos = $X('stxPosInRack').value-1, endPos = $X('endPosInRack').value-1;
 
-		for (var i=stxPos; i<=endPos; i++){
+		var startPos = Math.min(stxPos, endPos);
+		var lastPos = Math.max(stxPos, endPos);
+
+		for (var i = startPos; i <= lastPos; i++){
 			if (mask[i] == -1 || (!ifNew && mask[i]==deviceId))
 				continue;
 			return nvAlert("请重新选择合适的机柜位置，选中的机柜位置已被其他设备占用！");
@@ -2320,8 +2370,9 @@ var t_device = new IX.ITemplate({tpl: [
 '']});
 
 function Board(rackId, pos){
+	var thePos = MaxUnitInRack-pos-1;
 	var id = rackId + "-" + pos;
-	var html = t_board.renderData("", {id:id, idx : pos, top: pos *PXPerUnit});
+	var html = t_board.renderData("", {id:id, idx : pos, top: thePos *PXPerUnit});
 	return {
 		isDevice : function(){return false;},
 		getIdx : function(){return pos;},
@@ -2341,7 +2392,7 @@ function Device(devInfo){
 		id : deviceId,
 		unit : unit,
 		height : unit * PXPerUnit,
-		top: devInfo.pos * PXPerUnit,
+		top: (MaxUnitInRack-devInfo.pos-unit) * PXPerUnit,
 		img : pickImg(devType, unit)
 	};
 
@@ -2377,8 +2428,9 @@ function Device(devInfo){
 			var el = $X('device-' + deviceId);
 			if (!el)
 				return;
-			el.style.top = tpldata.top + "px";
-			el.style.height = tpldata.height + "px";
+			el.parentNode.replaceChild(jQuery(t_device.renderData("", tpldata)).get(0), el);
+			// el.style.top = tpldata.top + "px";
+			// el.style.height = tpldata.height + "px";
 		},
 		remove : function(){
 			var el = $X('device-' + deviceId);
@@ -3964,20 +4016,33 @@ IXW.Actions.configActions([["login", function(){
 	jQuery("#submit").attr("disabled",true);
 	jQuery("#account").attr("disabled",true);
 	jQuery("#password").attr("disabled",true);
+	var account = $X('account').value;
+	var password = $X('password').value;
+	if (!(account.isWindowsDirectory() && password.isWindowsDirectory())) {
+		jQuery("#submit").attr("disabled",false);
+		jQuery("#account").attr("disabled",false);
+		jQuery("#password").attr("disabled",false);
+		return NV.Dialog.alert("账号密码中请勿包含\\/^:*><|@?\"特殊字符！");
+	}
 	TNM.Global.entryCaller("login", {
-		username : $X('account').value,
-		password : $X('password').value
+		username : account,
+		password : password
 	}, function(data){
 		jQuery("#submit").attr("disabled",false);
 		jQuery("#account").attr("disabled",false);
 		jQuery("#password").attr("disabled",false);
 		TNM.Env.resetSession(data);
 		ixwPages.load("");
-	},function(data){
-		nvAlert(data.err);
+	}, function(data){
+		if (data.err)
+			nvAlert(data.err);
+		else
+			nvAlert("网络中断，请检查网络或者服务器是否正常！");
 		jQuery("#submit").attr("disabled",false);
 		jQuery("#account").attr("disabled",false);
 		jQuery("#password").attr("disabled",false);
+		$X('account').blur();
+		$X('password').blur();
 	});
 }]]);
 
@@ -4016,14 +4081,17 @@ TNM.Entry.init = function(pageCfg, pageParams, cbFn){
 			$XH.removeClass($XD.ancestor(this, "li"), "focus");
 		}
 	});
+	$X('account').focus();
 	var aEl = $X("submit");
 	jQuery('#account').bind("keydown", function(e){
 		if ( e.which == 13)
 			$X('$password').focus();
 	});
-	jQuery(document).keydown(function(event){
+	jQuery("#password").keydown(function(event){
 		if(event.keyCode == 13){
 			aEl.click();
+			$X('account').blur();
+			$X('password').blur();
 		}
 	});
 };
@@ -4225,6 +4293,24 @@ var t_editDecoder = new IX.ITemplate({tpl: [
 '</ul>',
 '']});
 
+var t_editSpecialDecoder = new IX.ITemplate({tpl: [
+'<ul class="{clz}">',
+	'<li><span class="label">名称</span>',
+		'<span><input class="readOnly" disabled="disabled" maxlength="64" id="device_name" value="{device_name}"></span></li>',
+	'<li><span class="label">IP地址</span>',
+		'<span><input class="readOnly" disabled="disabled" maxlength="15" id="device_ip" value="{device_ip}"></span></li>',
+	'<li><span class="label">用户名</span>',
+		'<span><input class="readOnly" disabled="disabled" maxlength="15" id="device_username" value="{device_username}"></span></li>',
+	'<li><span class="label">密码</span>',
+		'<span><input class="readOnly" disabled="disabled" maxlength="15" id="device_password" value="{device_password}"></span></li>',
+	'<li><span class="label">备注</span>',
+		'<span><input class="readOnly" disabled="disabled" id="device_desc" value="{device_desc}"></span></li>',
+	'<li><span class="label">登录方式</span>',
+		'<span><input class="loginIp" maxlength="15" id="device_loginIp" placeholder="IP" value="{device_loginIp}">',
+		'<input class="loginPort" maxlength="5" id="device_loginPort" placeholder="PORT" value="{device_loginPort}"></span></li>',
+'</ul>',
+'']});
+
 var t_editIPC = new IX.ITemplate({tpl: [
 '<ul class="{clz}">',
 	'<li><span class="label">设备名称</span>',
@@ -4297,6 +4383,13 @@ var deviceDialogCfg = {
 	decoder: {
 		clz : "decoder-edit",
 		tpl : t_editDecoder,
+		checkers : checkersBase.concat([
+			{name : "ip", key: "device_ip", empty : "设备IP"}
+		])
+	},
+	specialDecoder: {
+		clz : "decoder-edit",
+		tpl : t_editSpecialDecoder,
 		checkers : checkersBase.concat([
 			{name : "ip", key: "device_ip", empty : "设备IP"}
 		])
@@ -4475,23 +4568,26 @@ var TreeInfo = [
 {name : "",  nodes : [
 	{name : '数字摄像机', nodes : getLeafInfo([20, 21, 22])},
 	getLeafInfo([50])[0],
-	getLeafInfo([51])[0],
+	// getLeafInfo([51])[0],
+	getLeafInfo([55])[0],
 	{name : '网络和附属设备', nodes : getLeafInfo([64])}
 ]}];
 var CurrentOne = {name: "", nodes: [
-	getLeafInfo([51])[0],
+	// getLeafInfo([51])[0],
+	getLeafInfo([55])[0],
 	{name : '网络和附属设备', nodes : getLeafInfo([64])}
 ]};
 //grid的显示列表
 var DeviceGridCfgs = {
-	"51-64" : {columns: "devName,devType,devUserName,devPassWord"},
-	"20-21-22-50-51-64" : {columns: "devName,devType,devUserName,devPassWord"},
+	"55-64" : {columns: "devName,devType,devUserName,devPassWord"},
+	"20-21-22-50-55-64" : {columns: "devName,devType,devUserName,devPassWord"},
 	"20-21-22" : {columns: "devName,devType,devIp,devUserName,devPassWord"},
 	"20" : {columns: "devName,devType,devIp,devUserName,devPassWord"},
 	"21" : {columns: "devName,devType,devIp,devUserName,devPassWord"},
 	"22" : {columns: "devName,devType,devIp,devUserName,devPassWord"},
 	"50" : {columns: "devName,devIp,devUserName,devPassWord"},
 	"51" : {columns: "devName,devIp,devUserName,devPassWord"},
+	"55" : {columns: "devName,devIp,devUserName,devPassWord"},
 	"64" : {columns: "devName,devPath,devUserName,devPassWord"},
 };
 
@@ -4543,7 +4639,7 @@ function createDeviceGrid(cfgs, treeCfg){
 			var http="http://"+rowModel.get("loginIp")+(rowModel.get("loginPort")?":"+rowModel.get("loginPort"):"");
 			window.open(http); 
 		}else{	
-			nvAlert("无可登陆地址！");
+			nvAlert("无可登录地址！");
 		}
 	}
 	function editItem(rowModel, rowEl){
@@ -4557,7 +4653,7 @@ function createDeviceGrid(cfgs, treeCfg){
 		grid : {
 			clz : "device-list-"+treeCfg.types[0],
 			columns: columns,
-			actions : [["edit", "编辑", editItem],["login", "登陆", loginItem]],
+			actions : [["edit", "编辑", editItem],["login", "登录", loginItem]],
 			hasCheckbox : $XP(cfgs, "hasCheckbox") || true,
 			usePagination : $XP(cfgs, "usePagination") || true,
 			dataLoader : function(params, _cbFn){
@@ -4673,19 +4769,21 @@ var TreeInfo = [
 	{name : '模拟摄像机', nodes : getLeafInfo([31, 32, 33])},
 	{name : '拾音器', nodes : getLeafInfo([40, 41])},
 	getLeafInfo([50])[0],
-	getLeafInfo([51])[0],
-	getLeafInfo([52])[0],
+	// getLeafInfo([51])[0],
+	// getLeafInfo([52])[0],
 	getLeafInfo([53])[0],
 	getLeafInfo([54])[0],
-	getLeafInfo([65])[0],
+	getLeafInfo([55])[0],
+	// getLeafInfo([65])[0],
 	{name : '网络和附属设备', nodes : getLeafInfo([60, 61, 62, 63, 64, 90])}
 ]}];
 var CurrentOne = {name: "", nodes: [
 	{name : '服务器', nodes : getLeafInfo([0, 1, 2, 3])},
 	getLeafInfo([10])[0],
-	getLeafInfo([51])[0],
+	// getLeafInfo([51])[0],
 	getLeafInfo([53])[0],
 	getLeafInfo([54])[0],
+	getLeafInfo([55])[0],
 	{name : '网络和附属设备', nodes : getLeafInfo([60, 61, 62, 63, 64, 90])}
 ]};
 //grid的显示列表
@@ -4739,8 +4837,8 @@ function devicTreeClick(params){
 		el: params.el,
 		level: "all",
 		isHandled:"all",
-		from: TNM.Lib.GetCurDay(),
-		to: Math.floor(new Date().getTime()/1000)
+		from: TNM.Lib.GetCurDay().from,
+		to: TNM.Lib.GetCurDay().to
 	});	
 }
 //获取表格的工具栏
@@ -4919,8 +5017,8 @@ function showFaultList(params,cbFn){
 				el: "",
 				level: level,
 				isHandled: false,
-				from: TNM.Lib.GetCurDay(),
-				to: Math.floor(new Date().getTime()/1000),
+				from: TNM.Lib.GetCurDay().from,
+				to: TNM.Lib.GetCurDay().to,
 				fromItem:true,
 				id:id,
 				faultDate:faultDate
@@ -5088,8 +5186,8 @@ function createLogsGrid(){
 			siteId: "all",
 			deviceType: "all",
 			userId: "all",
-			from: TNM.Lib.GetCurDay(),
-			to: Math.floor(new Date().getTime()/1000),
+			from: TNM.Lib.GetCurDay().from,
+			to: TNM.Lib.GetCurDay().to,
 			ip:""
 		},
 		dataLoader : function(params, _cbFn){
@@ -5131,8 +5229,18 @@ var t_infotree = new IX.ITemplate({tpl: [
 	'<div id="Tree" class="{clz}"><div id="treeName">{treeName}</div>{treeData}</div>',
 	'<div class="nv-box {clz}">',
 		'<div class="nvgrid-title nv-title">性能监控</div>',
+		'<div class="server-info">',
+			'<div class="site-name">{siteName}</div>',
+			'<div class="server-space"></div>',
+			'<div class="server-name">{serverName}</div>',
+		'</div>',
 		'<div id="container"></div>',
 	'</div>',
+'']});
+
+var t_baseInfo = new IX.ITemplate({tpl: [
+	'<div id="Tree" class="{clz}"><div id="treeName">{treeName}</div>{treeData}</div>',
+	'<div id="container"></div>',
 '']});
 
 var t_statistics = new IX.ITemplate({tpl: [
@@ -5141,36 +5249,29 @@ var t_statistics = new IX.ITemplate({tpl: [
 '</div>',
 '']});
 
-var dashboards=null;
+var dashboards = null;
+var checker = null;
 function getDevices(cbFn){
 	deviceCaller("getDevicesForMonitor", {types:[0,1,2,3]}, function(data){
-		var arrCount=IX.loop(data, [], function(acc, site){
-		var Site = TCM.LineInfo.getSites().get(site.siteId);
-		if(Site){
-			var resultAll=[];
-			var axx=IX.loop(site.devices, [], function(arr, device){
-				var result;
-				if(device){
-					result=IX.loop(device.items, [], function(ayy, item){
-						if(item){
-							ayy.push({key:[item.id],name:item.name,id:item.id,nodes:[]}); 
-						}
-						return ayy;
-					});
+		var arrCount = IX.loop(data, [], function(acc, site){
+			var Site = TCM.LineInfo.getSites().get(site.siteId);
+			var obj = {};
+			var keys = [];
+			obj.nodes = IX.loop(site.devices, [], function(arr, device){
+				for (var k = 0; k < device.items.length; k++) {
+					keys.push(device.items[k].id);
+					arr.push({key: [device.items[k].id], name: device.items[k].name, id: device.items[k].id, nodes: []});
 				}
-				resultAll=resultAll.concat(result);
-				return resultAll;
-			
+				return arr;
 			});
-			var azz=IX.loop(axx, [], function(aee, item){
-				if(item){
-					aee.push(item.id);
-				}
-				return aee;
-			});
-			acc.push({key:azz,name:Site.name,siteId:site.siteId,nodes:axx});
-		}
-		return acc;
+			obj.key = keys;
+			obj.name = Site.name;
+			obj.siteId = site.siteId;
+			if (Site.type == 1) 
+				acc.unshift(obj);
+			else
+				acc.push(obj);
+			return acc;
 		});
 		cbFn({nodes : arrCount});
 	});
@@ -5178,11 +5279,20 @@ function getDevices(cbFn){
 
 function devicTreeClick(params){
 	var types = IX.map(params.keys.split(","),function(type){return Number(type);});
+	if (params.keys.split(",").length > 1){
+		jQuery(".site-name").html(params.name);
+		jQuery(".server-name").html(jQuery(params.el.parentNode).find("ul>li>a:first").attr("data-name"));
+	}else{
+		jQuery(".site-name").html(jQuery($XH.ancestor(params.el, "fold")).find("a:first").attr("data-name"));
+		jQuery(".server-name").html(params.name);
+	} 
 	dashboards = new TNM.Lib.DashboardPanel($X('container'), function(dataFn, failFn){
 		monitorCaller("getPerf", {id: types[0]}, dataFn, failFn);
 		resizeFn();
 	});
-	var checker = new TNM.Util.PeriodicChecker(function(){
+	if (checker)
+		checker.stop();
+	checker = new TNM.Util.PeriodicChecker(function(){
 		return $XH.first($X('container'), "mem");
 	}, dashboards.refresh, 15000);
 	setTimeout(function(){checker.start();}, 15000);
@@ -5229,7 +5339,9 @@ function monitoPerf(cbFn){
 		$X('body').innerHTML = t_infotree.renderData("", {
 			treeName : "线路设备列表",
 			treeData : tree.getHTML(),
-			clz : "monitor"
+			clz : "monitor",
+			siteName: "",
+			serverName: ""
 		});
 		showTreeNode();
 		jQuery(".nv-tree li:first a:first span:last").click();
@@ -5275,8 +5387,8 @@ function createStatisticsGrid(){
 		baseParams: {
 			siteId: "all",
 			deviceType: "all",
-			from: TNM.Lib.GetCurDay(),
-			to: Math.floor(new Date().getTime()/1000)
+			from: TNM.Lib.GetCurDay().from,
+			to: TNM.Lib.GetCurDay().to
 		},
 		dataLoader : function(params, _cbFn){
 			monitorCaller("getStatistics", params, function(data){
@@ -5304,6 +5416,63 @@ function showStatistic(cbFn){
 	createStatisticsGrid();
 	cbFn();
 }
+
+function baseTreeClick(params){
+	function versionFn(result, device){
+		var $a =jQuery(".row[data-id="+device.id+"]").find(".col-version>a");
+		$a.attr("title", result.version || result.err).html(result.version || result.err);	
+	}
+	var grid = new NV.Lib.Grid({
+		container: 'container',
+		clz : "monitor-base",
+		title : "基础信息",
+		usePagination : true,
+		columns : ["baseName", "baseType", "baseIP", "baseVersion"],
+		actions : [],
+		tools : {},
+		dataLoader : function(_params, _cbFn){
+			monitorCaller("getBaseInfo", IX.inherit(_params, {id: params.keys}), function(data){
+				_cbFn(data);
+				jQuery("#Tree").css("height", jQuery(".nv-grid").height());
+				IX.iterate(data.items, function(device, idx){
+					monitorCaller("getVersion", {
+						siteId: params.keys,
+						id: device.id,
+						type: device.type
+					}, function(result){
+						versionFn(result, device);
+					}, function(result){
+						versionFn(result, device);
+					});
+				});
+			});
+		}
+	});
+	grid.show();
+}
+
+function showBase(cbFn){
+	var cfg = IX.inherit({
+		htmlFn : function(node) {return node.name;},
+		click : baseTreeClick
+	}, {nodes: IX.map(lineInfo, function(site, idx){
+		return {
+			name: site.name,
+			key: [site.id],
+			siteId: site.id,
+			nodes: []
+		};
+	})});
+	var tree = new TCM.Lib.Tree(cfg);
+	$X('body').innerHTML = t_baseInfo.renderData("", {
+		treeName : "线路列表",
+		treeData : tree.getHTML(),
+		clz : "monitor"
+	});
+	jQuery(".nv-tree li:first a:first span:last").click();
+	cbFn();
+}
+
 function switchOut(currentContext, nextContext){
 	var pageName = currentContext.name;
 	if(pageName == "monitor-perf")
@@ -5311,7 +5480,7 @@ function switchOut(currentContext, nextContext){
 }
 IX.ns("TNM.Monitor");
 TNM.Monitor.init = function(pageCfg, pageParams, cbFn){
-	pageCfg.switchOut=switchOut;
+	pageCfg.switchOut = switchOut;
 	lineInfo = IX.loop(TCM.LineInfo.getSites().getAll(), [], function(acc, site, idx){
 		if(site.type == "1" ||site.type == "2" || site.type == "3")
 			acc.push(site);
@@ -5328,6 +5497,9 @@ TNM.Monitor.init = function(pageCfg, pageParams, cbFn){
 	case "monitor-logs":
 		showLogs(cbFn);
 		break;
+	case "monitor-base":
+		showBase(cbFn);
+		break;
 	}
 };
 })();
@@ -5339,6 +5511,26 @@ var ixwActions = IXW.Actions;
 var DeviceTypeNames = TCM.Const.DeviceTypeNames;
 //var FaultLevels = TNM.Const.FaultLevels;
 var FaultFormats = TNM.Const.FaultFormats;
+
+var kickChecker = new TNM.Util.KickChecker("", function(isStarted, cbFn){
+	TNM.Global.commonCaller("isKicked", "", function(data){
+		if (data && data.status === 1) {
+			return NV.Dialog.confirm4login("提示", "有新管理员登录系统，请您退出！",{
+				left : [],
+				right : [{name : "ok",text : "确定"}]
+			},function(){
+				clearSession();
+			});
+		}
+		isStarted = true;
+		cbFn();
+	});
+}, 1);
+
+function startChecker(){
+	kickChecker.stop();
+	kickChecker.start();
+}
 
 var nvCache = (function(){
 	var _ls = window.localStorage;
@@ -5566,7 +5758,8 @@ var NavItems = [
 ["monitor", "监控信息", [
 	["monitor-perf", "性能监控"],
 	["monitor-stat", "统计分析"],
-	["monitor-logs", "操作日志"]
+	["monitor-logs", "操作日志"],
+	["monitor-base", "基础信息"]
 ]]
 ];
 var DefaultNav = "sys-line";
@@ -5634,13 +5827,14 @@ var rtfw = new RTFaultWorker();
 function clearSession(){
 	sessionMgr = new SessionManager();
 	TCM.LineInfo.destroy();
+	kickChecker.stop();
 	IXW.Pages.load("entry");
 	rtfw.stop();
 }
 function startSession(data){
 	TCM.LineInfo.init(data.lineInfo);
 	sessionMgr = new SessionManager(data);
-	latestFaultId=null;
+	latestFaultId = null;
 	rtfw = new RTFaultWorker();
 	document.body.innerHTML = t_page.renderData("",{
 		nav : navMgr.getRenderData(),
@@ -5648,6 +5842,7 @@ function startSession(data){
 	});
 	navMgr.enableHover();
 	rtfw.start();
+	startChecker();
 }
 
 var PagesConfiurations = IX.map([
@@ -5673,6 +5868,7 @@ var PagesConfiurations = IX.map([
 {name: "monitor-perf"},
 {name: "monitor-stat"},
 {name: "monitor-logs"},
+{name: "monitor-base"},
 
 {name: "entry", bodyClz: "entry", needAuth : false}
 ], function(item){
@@ -5762,6 +5958,8 @@ TNM.Env.resetSession = function(data){startSession(data);};
 TNM.Env.getSession = function(){return sessionMgr;};
 TNM.Env.getLocalStroage = function(){return nvCache.getItem("tnmSessionKey");};
 TNM.Env.clearLocalStroage = function(){return nvCache.clear();};
+TNM.Env.clearRTFaultWorker = function(){rtfw.stop();};
+TNM.Env.isKicked = function(){kickChecker.stop();};
 
 var appInitialized = false;
 TNM.init = function(){

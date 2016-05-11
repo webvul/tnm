@@ -11,7 +11,7 @@ var DeviceTypes = TCM.Const.DeviceTypes;
 var DeviceTypeNames = TCM.Const.DeviceTypeNames;
 var DeviceTypesInRack = [
 	"TNM", "TVS", "TAS", "TVR", "Storage",
-	"Coder", "Decoder", "Spliter", 
+	"Coder", "Decoder", "Spliter", "SpecialDecoder",
 	"HUB", "PDH", "FiberConvertor", "KVM", "PDU"
 ];
 var MaxUnitInRack = TNM.Const.MaxUnitInRack;
@@ -131,7 +131,10 @@ function editRackDeviceDialog(device, siteId, rack){
 		var newDeviceId = $X('device4Rack').value;
 		var stxPos = $X('stxPosInRack').value-1, endPos = $X('endPosInRack').value-1;
 
-		for (var i=stxPos; i<=endPos; i++){
+		var startPos = Math.min(stxPos, endPos);
+		var lastPos = Math.max(stxPos, endPos);
+
+		for (var i = startPos; i <= lastPos; i++){
 			if (mask[i] == -1 || (!ifNew && mask[i]==deviceId))
 				continue;
 			return nvAlert("请重新选择合适的机柜位置，选中的机柜位置已被其他设备占用！");
@@ -203,8 +206,9 @@ function editRackDeviceDialog(device, siteId, rack){
 </tpl>
 <script>
 function Board(rackId, pos){
+	var thePos = MaxUnitInRack-pos-1;
 	var id = rackId + "-" + pos;
-	var html = t_board.renderData("", {id:id, idx : pos, top: pos *PXPerUnit});
+	var html = t_board.renderData("", {id:id, idx : pos, top: thePos *PXPerUnit});
 	return {
 		isDevice : function(){return false;},
 		getIdx : function(){return pos;},
@@ -224,7 +228,7 @@ function Device(devInfo){
 		id : deviceId,
 		unit : unit,
 		height : unit * PXPerUnit,
-		top: devInfo.pos * PXPerUnit,
+		top: (MaxUnitInRack-devInfo.pos-unit) * PXPerUnit,
 		img : pickImg(devType, unit)
 	};
 
@@ -260,8 +264,9 @@ function Device(devInfo){
 			var el = $X('device-' + deviceId);
 			if (!el)
 				return;
-			el.style.top = tpldata.top + "px";
-			el.style.height = tpldata.height + "px";
+			el.parentNode.replaceChild(jQuery(t_device.renderData("", tpldata)).get(0), el);
+			// el.style.top = tpldata.top + "px";
+			// el.style.height = tpldata.height + "px";
 		},
 		remove : function(){
 			var el = $X('device-' + deviceId);

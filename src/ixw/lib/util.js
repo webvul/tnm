@@ -6,9 +6,6 @@ TNM.Util.PeriodicChecker = function(condFn, checkFn, interval){
 	var isStarted = false;
 	var intv = interval || CommonQueryInterval;
 	var timers = null;
-	function failFn(data){
-		return false;
-	}
 	function _query(){
 		if (IX.isFn(condFn) && !condFn()){
 			isStarted = false;
@@ -17,10 +14,38 @@ TNM.Util.PeriodicChecker = function(condFn, checkFn, interval){
 		timers = setTimeout(function(){
 			if(isStarted) _query();
 		}, intv);
-		checkFn(failFn);
+		checkFn(function(data){ return false;});
 	}
 	return {
 		start  :function(){
+			if (!isStarted) _query();
+			isStarted = true;
+		},
+		stop : function(){
+			isStarted = false;
+			clearTimeout(timers);
+		}
+	};
+};
+
+TNM.Util.KickChecker = function(condFn, checkFn, interval){
+	var isStarted = false;
+	var intv = interval || CommonQueryInterval;
+	var timers = null;
+	function _query(){
+		if (IX.isFn(condFn) && !condFn()){
+			isStarted = false;
+			return;
+		}
+		timers = function(){
+			return setTimeout(function(){
+				if(isStarted) _query();
+			}, intv);
+		};
+		checkFn(isStarted, timers);
+	}
+	return {
+		start : function(){
 			if (!isStarted) _query();
 			isStarted = true;
 		},

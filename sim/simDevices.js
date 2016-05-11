@@ -56,6 +56,14 @@ var DeviceTypeNums = {
 		port: 1,
 		version: "1.0"
 	}},
+	4: {num: 1, tpl: {
+		name: "配置管理服务器", 
+		type: 4,
+		desc: "配置管理服务器",
+		ip: "192.168.11.",
+		port: 1,
+		version: "1.0"
+	}},
 	10: {num: 1, tpl: {
 		name: "存储设备", 
 		type: 10, 
@@ -213,6 +221,19 @@ var DeviceTypeNums = {
 		ip: "192.168.10.",
 		desc: "控制终端"
 	}},
+	55: {num: 17, tpl: {
+		name: "解码器(带画面分割)",
+		type: 55,
+		style: "S-60D-SD",
+		provider: "NKF",
+		ip: "192.168.9.",
+		port: 1,
+		desc: "解码器(带画面分割)",
+		version: "1.0",
+		driverId: 1,
+		channelNum: 2,
+		maxWindow: 4
+	}},
 	60: {num: 1, tpl: {
 		name: "交换机",
 		type: 60,
@@ -369,7 +390,7 @@ function SiteDevices(site){
 		});
 	}
 	
-	createCommonDevice([0, 1, 2, 3, 51, 54], {});
+	createCommonDevice([0, 1, 2, 3, 4, 51, 54, 55], {});
 
 	createCommonDevice([10], {capacity: Math.floor(Math.random()*5 + 1) + 'GB'});
 
@@ -584,9 +605,9 @@ function SiteDevices(site){
 
 	//列出所有设备
 	function getAllDevices(siteId){
-		var DevicesTypes = [1, 2, 3, 10, 20, 21, 22, 31, 32, 33, 40, 41, 50, 51, 52, 53, 54, 60, 61, 62, 63, 64, 65, 90];
+		var DevicesTypes = [1, 2, 3, 10, 20, 21, 22, 31, 32, 33, 40, 41, 50, 51, 52, 53, 54, 55, 60, 61, 62, 63, 64, 65, 90];
 		if(siteType == 1)
-			DevicesTypes = [0, 1, 2, 3, 10, 51, 52, 53, 54, 60, 61, 62, 63, 64, 90];
+			DevicesTypes = [0, 1, 2, 3, 10, 51, 52, 53, 54, 55, 60, 61, 62, 63, 64, 90];
 		var allDevices = [];
 		for (var i = 0; i < DevicesTypes.length; i++) {
 			allDevices.push({
@@ -604,9 +625,9 @@ function SiteDevices(site){
 	}
 	//列出所有监视信息里的设备目前，只有服务器
 	function getDevicesForMonitor(siteId){
-		var DevicesTypes = [1, 2, 3, 10, 20, 21, 22, 31, 32, 33, 40, 41, 50, 51, 52, 53, 54, 60, 61, 62, 63, 64, 65, 90];
+		var DevicesTypes = [1, 2, 3, 10, 20, 21, 22, 31, 32, 33, 40, 41, 50, 51, 52, 53, 54, 55, 60, 61, 62, 63, 64, 65, 90];
 		if(siteType == 1)
-			DevicesTypes = [0, 1, 2, 3, 10, 51, 52, 53, 54, 60, 61, 62, 63, 64, 90];
+			DevicesTypes = [0, 1, 2, 3, 10, 51, 52, 53, 54, 55, 60, 61, 62, 63, 64, 90];
 		var allDevices = [];
 		var items=[{id:1,name:"服务器1"},{id:2,name:"服务器2"},{id:3,name:"服务器1"},{id:4,name:"服务器4"}];
 		for (var i = 0; i < DevicesTypes.length; i++) {
@@ -618,8 +639,8 @@ function SiteDevices(site){
 		};
 		var obj = {
 			siteId: siteId,
-			devices: allDevices,
-		}
+			devices: allDevices
+		};
 		var arr = [];
 		arr.push(obj);
 		return arr;
@@ -1031,5 +1052,15 @@ Test.handleFault = function(params){
 	var sites = Test.getCurrentSite();
 	var siteDevices = siteDevicesHT.get(sites[0].id);
 	return siteDevices.handleFault(params);
-}
+};
+Test.getBaseInfo = function(params){
+	var siteId = params.id;
+	var siteDevices = siteDevicesHT.get(siteId);
+	return siteDevices.getDevices4Type(IX.inherit(params, {types: [0, 1, 2, 3, 4]}));
+};
+Test.getVersion = function(params){
+	var siteId = params.siteId;
+	var siteDevices = siteDevicesHT.get(siteId);
+	return {version: "V1.01"};
+};
 })();

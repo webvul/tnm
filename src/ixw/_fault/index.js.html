@@ -17,19 +17,21 @@ var TreeInfo = [
 	{name : '模拟摄像机', nodes : getLeafInfo([31, 32, 33])},
 	{name : '拾音器', nodes : getLeafInfo([40, 41])},
 	getLeafInfo([50])[0],
-	getLeafInfo([51])[0],
-	getLeafInfo([52])[0],
+	// getLeafInfo([51])[0],
+	// getLeafInfo([52])[0],
 	getLeafInfo([53])[0],
 	getLeafInfo([54])[0],
-	getLeafInfo([65])[0],
+	getLeafInfo([55])[0],
+	// getLeafInfo([65])[0],
 	{name : '网络和附属设备', nodes : getLeafInfo([60, 61, 62, 63, 64, 90])}
 ]}];
 var CurrentOne = {name: "", nodes: [
 	{name : '服务器', nodes : getLeafInfo([0, 1, 2, 3])},
 	getLeafInfo([10])[0],
-	getLeafInfo([51])[0],
+	// getLeafInfo([51])[0],
 	getLeafInfo([53])[0],
 	getLeafInfo([54])[0],
+	getLeafInfo([55])[0],
 	{name : '网络和附属设备', nodes : getLeafInfo([60, 61, 62, 63, 64, 90])}
 ]};
 //grid的显示列表
@@ -83,8 +85,8 @@ function devicTreeClick(params){
 		el: params.el,
 		level: "all",
 		isHandled:"all",
-		from: TNM.Lib.GetCurDay(),
-		to: Math.floor(new Date().getTime()/1000)
+		from: TNM.Lib.GetCurDay().from,
+		to: TNM.Lib.GetCurDay().to
 	});	
 }
 //获取表格的工具栏
@@ -263,8 +265,8 @@ function showFaultList(params,cbFn){
 				el: "",
 				level: level,
 				isHandled: false,
-				from: TNM.Lib.GetCurDay(),
-				to: Math.floor(new Date().getTime()/1000),
+				from: TNM.Lib.GetCurDay().from,
+				to: TNM.Lib.GetCurDay().to,
 				fromItem:true,
 				id:id,
 				faultDate:faultDate

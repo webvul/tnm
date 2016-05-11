@@ -114,6 +114,7 @@ IXW.Lib.GridModel = function(id, cfg){
 		addItems : dataModel.addItems,
 		removeItems : dataModel.removeItems,
 
+		getTotal : function(){return dataModel.getTotal();},
 		getTpldata : function(){return tpldata;},
 		getPageCount : function(){return Math.ceil(dataModel.getTotal()/pageSize);},	
 		resetPage : function(_pageNo, _pageSize, cbFn){

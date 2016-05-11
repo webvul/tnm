@@ -58,6 +58,12 @@ TNM.Global.commonCaller = function(name, params, cbFn, failFn){
 			cbFn([{id, siteId, deviceType, deviceId, level, code, faultDate:TimeTickInSec}])
 		*/
 		return setTimeout(function(){cbFn(Test.getRTFaults(params));}, 100);
+	case "isKicked" :
+		/**	cbFn({
+			status: 1 || other
+		})
+		 */
+		return setTimeout(function(){cbFn(Test.isKicked());}, 5000);
 	}
 };
 
@@ -212,7 +218,21 @@ TNM.Global.monitorCaller = function(name, params, cbFn, failFn){
 	case "exportStatistics":
 		/* params : {siteId, deviceType, from, to}
 		*/
-		setTimeout(function(){cbFn(Test.exportStatistics(params));},100);
+		setTimeout(function(){cbFn(Test.exportStatistics(params));}, 100);
+		break;
+	case "getBaseInfo":
+		/* params: {id}
+			cbFn: {total, items: [
+				{id, name, ip, type}
+			]}
+		*/
+		setTimeout(function(){cbFn(Test.getBaseInfo(params));}, 100);
+		break;
+	case "getVersion":
+		/* params: {id, siteId, type}
+			cbFn: {version}
+		*/
+		setTimeout(function(){cbFn(Test.getVersion(params));}, 100);
 		break;
 	}
 };

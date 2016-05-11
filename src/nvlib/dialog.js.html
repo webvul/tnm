@@ -47,6 +47,8 @@ function dialogBodyRefresh(bodyEl){
 
 function showDialog(cfg){
 	dialogCfg = cfg;
+	if (jQuery(".confirmLogin").length !== 0)
+		return;
 	if (!dialog)
 		dialog = new IXW.Lib.ModalDialog({
 			id : "nv-dialog",
@@ -77,6 +79,7 @@ NV.Dialog.confirm = function(title, msg, okFn){ showDialog({
 NV.Dialog.confirm4login = function(title, msg, btns, okFn){ 
 	showDialog({
 		title : IX.encodeTXT(title),
+		clz: "confirmLogin",
 		btns : btns,
 		content : t_confirm.renderData("", {msg: msg}),
 		listen : { ok : function(){okFn(hideDialog);} }

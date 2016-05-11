@@ -321,6 +321,7 @@ var t_alert = new IX.ITemplate({tpl: [
 ]});
 
 var t_info = new IX.ITemplate({tpl: [
+	'<div class="ixw-bg"></div>',
 	'<span class="content">{content}</span>',
 ]});
 

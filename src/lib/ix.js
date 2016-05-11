@@ -181,6 +181,8 @@ $XF(obj, fname) = IX.getPropertyAsFunction.
 
 	isPassword()
 	isEmail()
+	isIP()
+	isWindowsDirectory()
 	
 	trunc(len)
 	tail(len)
@@ -594,6 +596,7 @@ var FormPattern = new RegExp( '(?:<form.*?>)|(?:<\/form>)', 'img');
 var TrimPattern = /(^\s*)|\r/g;
 var ReplaceKeyPattern = /{[^{}]*}/g;
 var IpPattern = /^([0-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.([0-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.([0-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])\.([0-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])$/;
+var windowsDirectoryPattern = /^[^|\/\\@\^\:\?<>"\*]+$/;
 
 IX.extend(String.prototype, {
 	camelize: function(){ return this.replace(/\-(\w)/ig, function(B, A) {return A.toUpperCase();}); },
@@ -626,6 +629,10 @@ IX.extend(String.prototype, {
 	isIP: function(){
 		var IP = this.trim();
 		return IpPattern.test(IP);
+	},
+	isWindowsDirectory: function(){
+		var windowsDirectory = this.trim();
+		return windowsDirectoryPattern.test(windowsDirectory);
 	},
 	
 	trunc:function(len){return (this.length>len)?(this.substring(0, len-3)+"..."):this;},

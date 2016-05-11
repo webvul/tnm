@@ -1516,7 +1516,7 @@ IX.IDate = function(timeInSecond) {
 	
 	return {
 		toText: function(){return dateStr;},
-		toWeek : function() {return DT_Weeks[timeValues[5]];},
+		toWeek : function() {return DT_Weeks[timeValues[5]-0];},
 		toDate: toDateStr,
 		toTime : function(ds){return [timeValues[3], timeValues[4]].join(ds || ":");},
 		toShort : function(){ return _toIntvText(new Date(), false);},

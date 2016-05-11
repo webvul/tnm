@@ -371,12 +371,12 @@ function PageHelper(){
 		}, cbFn);
 	}
 	function _loadByState(state, cbFn){
-		var name = state.name || DefaultPageName;
+		var name = (state && state.name) || DefaultPageName;
 		var cfg = PageConfigurations[name];
 		if(!pageAuthCheckFn(name, cfg))
 			return window.alert("该页面已经失效，无法浏览。请登录之后重新尝试。")
 		isInitialized = true;
-		_loadByContext(state, resetContext, cbFn);
+		_loadByContext(state || IX.inherit(cfg, {page: getPageParams(cfg.path, cfg.path)}), resetContext, cbFn);
 	}
 	function _stateChange(e){
 		//console.log("popstate:",e, e.state);

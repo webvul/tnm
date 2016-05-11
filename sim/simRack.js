@@ -7,7 +7,7 @@ var DeviceTypes = TCM.Const.DeviceTypes;
 var DeviceTypeNames = TCM.Const.DeviceTypeNames;
 var DeviceTypesInRack = [
 	"TNM", "TVS", "TAS", "TVR", "Storage",
-	"Coder", "Decoder", "Spliter", 
+	"Coder", "Decoder", "Spliter", "SpecialDecoder",
 	"HUB", "PDH", "FiberConvertor", "KVM", "PDU"
 ];
 var RackDeviceTmpls = {
@@ -18,7 +18,8 @@ var RackDeviceTmpls = {
 	"Storage": {num : 3, size : 4},
 	"Coder": {num : 1, size :  3}, 
 	"Decoder": {num : 2, size : 4}, 
-	"Spliter": {num : 1, size :  2}, 
+	"Spliter": {num : 1, size :  2},
+	"SpecialDecoder": {num: 2, size: 4}, 
 	"HUB": {num : 1, size :  2}, 
 	"PDH": {num : 1, size :  1}, 
 	"FiberConvertor": {num : 1, size :  2}, 

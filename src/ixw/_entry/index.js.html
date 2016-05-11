@@ -20,20 +20,33 @@ IXW.Actions.configActions([["login", function(){
 	jQuery("#submit").attr("disabled",true);
 	jQuery("#account").attr("disabled",true);
 	jQuery("#password").attr("disabled",true);
+	var account = $X('account').value;
+	var password = $X('password').value;
+	if (!(account.isWindowsDirectory() && password.isWindowsDirectory())) {
+		jQuery("#submit").attr("disabled",false);
+		jQuery("#account").attr("disabled",false);
+		jQuery("#password").attr("disabled",false);
+		return NV.Dialog.alert("账号密码中请勿包含\\/^:*><|@?\"特殊字符！");
+	}
 	TNM.Global.entryCaller("login", {
-		username : $X('account').value,
-		password : $X('password').value
+		username : account,
+		password : password
 	}, function(data){
 		jQuery("#submit").attr("disabled",false);
 		jQuery("#account").attr("disabled",false);
 		jQuery("#password").attr("disabled",false);
 		TNM.Env.resetSession(data);
 		ixwPages.load("");
-	},function(data){
-		nvAlert(data.err);
+	}, function(data){
+		if (data.err)
+			nvAlert(data.err);
+		else
+			nvAlert("网络中断，请检查网络或者服务器是否正常！");
 		jQuery("#submit").attr("disabled",false);
 		jQuery("#account").attr("disabled",false);
 		jQuery("#password").attr("disabled",false);
+		$X('account').blur();
+		$X('password').blur();
 	});
 }]]);
 
@@ -72,14 +85,17 @@ TNM.Entry.init = function(pageCfg, pageParams, cbFn){
 			$XH.removeClass($XD.ancestor(this, "li"), "focus");
 		}
 	});
+	$X('account').focus();
 	var aEl = $X("submit");
 	jQuery('#account').bind("keydown", function(e){
 		if ( e.which == 13)
-			$X('$password').focus();
+			$X('password').focus();
 	});
-	jQuery(document).keydown(function(event){
+	jQuery("#password").keydown(function(event){
 		if(event.keyCode == 13){
 			aEl.click();
+			$X('account').blur();
+			$X('password').blur();
 		}
 	});
 };

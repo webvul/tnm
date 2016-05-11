@@ -4,7 +4,9 @@ module.exports = {
 	namespace: "TNM",
 	version: "1.0",
 
-	preless :{
+	oem: ["huaqi"],
+
+	preless : {
 		src : "./_asserts",
 		dest : "./src",
 		demoDest : "./_demo",
@@ -93,12 +95,11 @@ module.exports = {
 		},
 		less :{
 			deploy:{
-				options: {
-					paths: ["src/less"]
-				},
-				files: {
-					"_dist/css/<%= pkg.name %>.css": "src/less/core.less"
-				}
+				expand : true,
+				cwd : "src/less",
+				src : ["<%= pkg.name %>*.less"],
+				dest : "_dist/css",
+				ext: ".css"
 			}
 		},
 		concat: {
